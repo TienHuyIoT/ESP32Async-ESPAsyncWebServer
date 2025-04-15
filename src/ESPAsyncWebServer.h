@@ -6,7 +6,9 @@
 
 #include <Arduino.h>
 #include <FS.h>
+#if ESP_IDF_VERSION_MAJOR >= 4
 #include <lwip/tcpbase.h>
+#endif
 
 #include <algorithm>
 #include <deque>
@@ -1099,6 +1101,7 @@ public:
   void begin();
   void end();
 
+#if ESP_IDF_VERSION_MAJOR >= 4
   tcp_state state() const {
 #ifdef ESP8266
     // ESPAsyncTCP and RPAsyncTCP methods are not corrected declared with const for immutable ones.
@@ -1107,6 +1110,7 @@ public:
     return static_cast<tcp_state>(_server.status());
 #endif
   }
+#endif
 
 #if ASYNC_TCP_SSL_ENABLED
   void onSslFileRequest(AcSSlFileHandler cb, void *arg);

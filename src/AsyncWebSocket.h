@@ -9,7 +9,7 @@
 #include <AsyncTCP.h>
 #include <mutex>
 #ifndef WS_MAX_QUEUED_MESSAGES
-#define WS_MAX_QUEUED_MESSAGES 32
+#define WS_MAX_QUEUED_MESSAGES 64
 #endif
 #elif defined(ESP8266)
 #include <ESPAsyncTCP.h>
@@ -36,13 +36,20 @@
 
 #ifndef DEFAULT_MAX_WS_CLIENTS
 #ifdef ESP32
-#define DEFAULT_MAX_WS_CLIENTS 8
+#define DEFAULT_MAX_WS_CLIENTS 5
 #else
 #define DEFAULT_MAX_WS_CLIENTS 4
 #endif
 #endif
 
+#define CLIENTS_LIST_THREAD_SAFETY  1
+
 using AsyncWebSocketSharedBuffer = std::shared_ptr<std::vector<uint8_t>>;
+
+typedef enum : bool {
+  WS_CLIENT_QUEUE_UNLOCK,
+  WS_CLIENT_QUEUE_LOCK
+} wsClientQueueLock;
 
 class AsyncWebSocket;
 class AsyncWebSocketResponse;
@@ -119,6 +126,9 @@ public:
   size_t length() const {
     return _buffer->size();
   }
+  AsyncWebSocketSharedBuffer buffer() {
+    return _buffer;
+  }
 };
 
 class AsyncWebSocketMessage {
@@ -150,6 +160,8 @@ private:
   AsyncClient *_client;
   AsyncWebSocket *_server;
   uint32_t _clientId;
+  IPAddress _ip;
+  uint16_t _port;
   AwsClientStatus _status;
 #ifdef ESP32
   mutable std::recursive_mutex _lock;
@@ -178,6 +190,12 @@ public:
   // client id increments for the given server
   uint32_t id() const {
     return _clientId;
+  }
+  IPAddress remoteIP() const {
+    return _ip;
+  }
+  uint16_t remotePort() const {
+    return _port;
   }
   AwsClientStatus status() const {
     return _status;
@@ -222,9 +240,6 @@ public:
   bool willCloseClientOnQueueFull() const {
     return closeWhenFull;
   }
-
-  IPAddress remoteIP() const;
-  uint16_t remotePort() const;
 
   bool shouldBeDeleted() const {
     return !_client;
@@ -290,13 +305,15 @@ class AsyncWebSocket : public AsyncWebHandler {
 private:
   String _url;
   std::list<AsyncWebSocketClient> _clients;
+#if (defined ESP32) && (CLIENTS_LIST_THREAD_SAFETY == 1)
+  // Same as for individual messages, protect mutations of _clients list
+  // since simultaneous access from different tasks is possible
+  mutable std::recursive_mutex _client_queue_lock;
+#endif
   uint32_t _cNextId;
   AwsEventHandler _eventHandler;
   AwsHandshakeHandler _handshakeHandler;
   bool _enabled;
-#ifdef ESP32
-  mutable std::mutex _lock;
-#endif
 
 public:
   typedef enum {
@@ -320,8 +337,10 @@ public:
   bool availableForWriteAll();
   bool availableForWrite(uint32_t id);
 
-  size_t count() const;
-  AsyncWebSocketClient *client(uint32_t id);
+  size_t countAll(bool isLock = WS_CLIENT_QUEUE_LOCK) const;
+  size_t count(AwsClientStatus status = WS_CONNECTED, bool isLock = WS_CLIENT_QUEUE_LOCK) const;
+  AsyncWebSocketClient *client(uint32_t id, AwsClientStatus status = WS_CONNECTED);
+  AsyncWebSocketClient *client(AwsClientStatus status = WS_CONNECTED);
   bool hasClient(uint32_t id) {
     return client(id) != nullptr;
   }

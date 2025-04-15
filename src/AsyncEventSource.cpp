@@ -7,12 +7,23 @@
 #endif
 #include "AsyncEventSource.h"
 
+#define ASYNC_SSE_CONSOLE_DEBUG(f_, ...)  //Serial.printf_P(PSTR("\n\n[Async SSE] %s line %u: " f_ "\n"),  __func__, __LINE__, ##__VA_ARGS__)
+
 #define ASYNC_SSE_NEW_LINE_CHAR (char)0xa
 
 using namespace asyncsrv;
 
-static String generateEventMessage(const char *message, const char *event, uint32_t id, uint32_t reconnect) {
+#if ESP_IDF_VERSION_MAJOR >= 4
+static String generateEventMessage(const char *message, const char *event, uint32_t id, uint32_t reconnect)
+#else
+static std::string generateEventMessage(const char *message, const char *event, uint32_t id, uint32_t reconnect)
+#endif
+{
+#if ESP_IDF_VERSION_MAJOR >= 4
   String str;
+#else
+  std::string str;
+#endif
   size_t len{0};
   if (message) {
     len += strlen(message);
@@ -24,13 +35,22 @@ static String generateEventMessage(const char *message, const char *event, uint3
 
   len += 42;  // give it some overhead
 
+#if ESP_IDF_VERSION_MAJOR >= 4
   if (!str.reserve(len)) {
 #ifdef ESP32
     log_e("Failed to allocate");
 #endif
     return emptyString;
   }
-
+#else
+  str.reserve(len);
+  if (str.capacity() < len) {
+#ifdef ESP32
+    log_e("Failed to allocate");
+#endif
+    return ""; //emptyString
+  }
+#endif
   if (reconnect) {
     str += T_retry_;
     str += reconnect;
@@ -88,7 +108,11 @@ static String generateEventMessage(const char *message, const char *event, uint3
     }
 
     str += T_data_;
+#if ESP_IDF_VERSION_MAJOR >= 4
     str.concat(lineStart, lineEnd - lineStart);
+#else
+    str.append(lineStart, lineEnd - lineStart);
+#endif
     str += ASYNC_SSE_NEW_LINE_CHAR;  // \n
 
     lineStart = nextLine;
@@ -154,6 +178,7 @@ AsyncEventSourceClient::AsyncEventSourceClient(AsyncWebServerRequest *request, A
     _lastId = atoi(request->getHeader(T_Last_Event_ID)->value().c_str());
   }
 
+  _clientId = _server->_getNextId();
   _client->setRxTimeout(0);
   _client->onError(NULL, NULL);
   _client->onAck(
@@ -185,6 +210,8 @@ AsyncEventSourceClient::AsyncEventSourceClient(AsyncWebServerRequest *request, A
     this
   );
 
+  _ip = _client->remoteIP();
+  _port = _client->remotePort();
   _server->_addClient(this);
   delete request;
 
@@ -320,7 +347,11 @@ bool AsyncEventSourceClient::send(const char *message, const char *event, uint32
   if (!connected()) {
     return false;
   }
+#if ESP_IDF_VERSION_MAJOR >= 4
   return _queueMessage(std::make_shared<String>(generateEventMessage(message, event, id, reconnect)));
+#else
+  return _queueMessage(std::make_shared<std::string>(generateEventMessage(message, event, id, reconnect)));
+#endif
 }
 
 void AsyncEventSourceClient::_runQueue() {
@@ -393,7 +424,7 @@ void AsyncEventSource::_handleDisconnect(AsyncEventSourceClient *client) {
   _adjust_inflight_window();
 }
 
-void AsyncEventSource::close() {
+void AsyncEventSource::close(uint8_t clients, bool isLock) {
   // While the whole loop is not done, the linked list is locked and so the
   // iterator should remain valid even when AsyncEventSource::_handleDisconnect()
   // is called very early
@@ -408,6 +439,12 @@ void AsyncEventSource::close() {
        * The calling flow _onDisconnect() --> _handleDisconnect() --> deadlock
       */
       c->close();
+      if (clients > 0) {
+        --clients;
+        if (0 == clients) {
+          break;
+        }
+      }
     }
   }
 }
@@ -433,7 +470,11 @@ size_t AsyncEventSource::avgPacketsWaiting() const {
 }
 
 AsyncEventSource::SendStatus AsyncEventSource::send(const char *message, const char *event, uint32_t id, uint32_t reconnect) {
+#if ESP_IDF_VERSION_MAJOR >= 4
   AsyncEvent_SharedData_t shared_msg = std::make_shared<String>(generateEventMessage(message, event, id, reconnect));
+#else
+  AsyncEvent_SharedData_t shared_msg = std::make_shared<std::string>(generateEventMessage(message, event, id, reconnect));
+#endif
 #ifdef ESP32
   std::lock_guard<std::recursive_mutex> lock(_client_queue_lock);
 #endif
@@ -449,7 +490,7 @@ AsyncEventSource::SendStatus AsyncEventSource::send(const char *message, const c
   return hits == 0 ? DISCARDED : (miss == 0 ? ENQUEUED : PARTIALLY_ENQUEUED);
 }
 
-size_t AsyncEventSource::count() const {
+size_t AsyncEventSource::count(bool isLock) const {
 #ifdef ESP32
   std::lock_guard<std::recursive_mutex> lock(_client_queue_lock);
 #endif

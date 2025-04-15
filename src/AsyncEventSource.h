@@ -5,6 +5,7 @@
 #define ASYNCEVENTSOURCE_H_
 
 #include <Arduino.h>
+#include <string>
 
 #ifdef ESP32
 #include <AsyncTCP.h>
@@ -45,7 +46,16 @@ class AsyncEventSourceClient;
 using ArEventHandlerFunction = std::function<void(AsyncEventSourceClient *client)>;
 using ArAuthorizeConnectHandler = ArAuthorizeFunction;
 // shared message object container
+#if ESP_IDF_VERSION_MAJOR >= 4
 using AsyncEvent_SharedData_t = std::shared_ptr<String>;
+#else
+using AsyncEvent_SharedData_t = std::shared_ptr<std::string>;
+#endif
+
+typedef enum : bool {
+  SSE_CLIENT_QUEUE_UNLOCK,
+  SSE_CLIENT_QUEUE_LOCK
+} sseClientQueueLock;
 
 /**
  * @brief Async Event Message container with shared message content data
@@ -61,7 +71,11 @@ private:
 public:
   AsyncEventSourceMessage(AsyncEvent_SharedData_t data) : _data(data){};
 #if defined(ESP32)
-  AsyncEventSourceMessage(const char *data, size_t len) : _data(std::make_shared<String>(data, len)){};
+#if ESP_IDF_VERSION_MAJOR >= 4
+  AsyncEventSourceMessage(const char *data, size_t len) : _data(std::make_shared<String>(data, len)) {};
+#else
+  AsyncEventSourceMessage(const char *data, size_t len) : _data(std::make_shared<std::string>(data, len)) {};
+#endif
 #elif defined(TARGET_RP2040) || defined(TARGET_RP2350) || defined(PICO_RP2040) || defined(PICO_RP2350)
   AsyncEventSourceMessage(const char *data, size_t len) : _data(std::make_shared<String>()) {
     if (data && len > 0) {
@@ -124,6 +138,9 @@ class AsyncEventSourceClient {
 private:
   AsyncClient *_client;
   AsyncEventSource *_server;
+  uint32_t _clientId;
+  IPAddress _ip;
+  uint16_t _port;
   uint32_t _lastId{0};
   size_t _inflight{0};                    // num of unacknowledged bytes that has been written to socket buffer
   size_t _max_inflight{SSE_MAX_INFLIGH};  // max num of unacknowledged bytes that could be written to socket buffer
@@ -168,18 +185,26 @@ public:
      */
   bool write(AsyncEvent_SharedData_t message) {
     return connected() && _queueMessage(std::move(message));
-  };
+  }
 
   [[deprecated("Use _write(AsyncEvent_SharedData_t message) instead to share same data with multiple SSE clients")]]
   bool write(const char *message, size_t len) {
     return connected() && _queueMessage(message, len);
-  };
+  }
 
   // close client's connection
   void close();
 
   // getters
-
+  uint32_t id() const {
+    return _clientId;
+  }
+  IPAddress remoteIP() const {
+    return _ip;
+  }
+  uint16_t remotePort() const {
+    return _port;
+  }
   AsyncClient *client() {
     return _client;
   }
@@ -191,7 +216,7 @@ public:
   }
   size_t packetsWaiting() const {
     return _messageQueue.size();
-  };
+  }
 
   /**
      * @brief Sets max amount of bytes that could be written to client's socket while awaiting delivery acknowledge
@@ -227,6 +252,7 @@ class AsyncEventSource : public AsyncWebHandler {
 private:
   String _url;
   std::list<std::unique_ptr<AsyncEventSourceClient>> _clients;
+  uint32_t _cNextId;
 #ifdef ESP32
   // Same as for individual messages, protect mutations of _clients list
   // since simultaneous access from different tasks is possible
@@ -245,8 +271,8 @@ public:
     PARTIALLY_ENQUEUED = 2,
   } SendStatus;
 
-  AsyncEventSource(const char *url) : _url(url){};
-  AsyncEventSource(const String &url) : _url(url){};
+  explicit AsyncEventSource(const char *url) : _url(url), _cNextId(1) {};
+  AsyncEventSource(const String &url) : _url(url), _cNextId(1) {};
   ~AsyncEventSource() {
     close();
   };
@@ -255,7 +281,7 @@ public:
     return _url.c_str();
   }
   // close all connected clients
-  void close();
+  void close(uint8_t clients = 0, bool isLock = SSE_CLIENT_QUEUE_LOCK);
 
   /**
      * @brief set on-connect callback for the client
@@ -292,12 +318,15 @@ public:
   void authorizeConnect(ArAuthorizeConnectHandler cb);
 
   // returns number of connected clients
-  size_t count() const;
+  size_t count(bool isLock = SSE_CLIENT_QUEUE_LOCK) const;
 
   // returns average number of messages pending in all client's queues
   size_t avgPacketsWaiting() const;
 
   // system callbacks (do not call from user code!)
+  uint32_t _getNextId() {
+    return _cNextId++;
+  }
   void _addClient(AsyncEventSourceClient *client);
   void _handleDisconnect(AsyncEventSourceClient *client);
   bool canHandle(AsyncWebServerRequest *request) const override final;
