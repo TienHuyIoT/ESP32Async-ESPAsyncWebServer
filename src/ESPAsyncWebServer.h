@@ -1107,7 +1107,11 @@ public:
     // ESPAsyncTCP and RPAsyncTCP methods are not corrected declared with const for immutable ones.
     return static_cast<tcp_state>(const_cast<AsyncWebServer *>(this)->_server.status());
 #else
+#ifdef ASYNCTCP_VERSION_PATCH
     return static_cast<tcp_state>(_server.status());
+#else
+    return static_cast<tcp_state>(0); // AsyncTCPSock
+#endif
 #endif
   }
 #endif
