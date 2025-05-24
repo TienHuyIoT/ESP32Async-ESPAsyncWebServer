@@ -36,7 +36,7 @@ AsyncWebServer::AsyncWebServer(uint16_t port) : _server(port) {
         return;
       }
       c->setRxTimeout(3);
-      AsyncWebServerRequest *r = new AsyncWebServerRequest((AsyncWebServer *)s, c);
+      AsyncWebServerRequest *r = new (std::nothrow) AsyncWebServerRequest((AsyncWebServer *)s, c);
       if (r == NULL) {
         c->abort();
         delete c;
@@ -54,11 +54,17 @@ AsyncWebServer::~AsyncWebServer() {
 }
 
 AsyncWebRewrite &AsyncWebServer::addRewrite(std::shared_ptr<AsyncWebRewrite> rewrite) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_rewriteLock);
+#endif
   _rewrites.emplace_back(rewrite);
   return *_rewrites.back().get();
 }
 
 AsyncWebRewrite &AsyncWebServer::addRewrite(AsyncWebRewrite *rewrite) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_rewriteLock);
+#endif
   _rewrites.emplace_back(rewrite);
   return *_rewrites.back().get();
 }
@@ -68,6 +74,9 @@ bool AsyncWebServer::removeRewrite(AsyncWebRewrite *rewrite) {
 }
 
 bool AsyncWebServer::removeRewrite(const char *from, const char *to) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_rewriteLock);
+#endif
   for (auto r = _rewrites.begin(); r != _rewrites.end(); ++r) {
     if (r->get()->from() == from && r->get()->toUrl() == to) {
       _rewrites.erase(r);
@@ -78,16 +87,25 @@ bool AsyncWebServer::removeRewrite(const char *from, const char *to) {
 }
 
 AsyncWebRewrite &AsyncWebServer::rewrite(const char *from, const char *to) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_rewriteLock);
+#endif
   _rewrites.emplace_back(std::make_shared<AsyncWebRewrite>(from, to));
   return *_rewrites.back().get();
 }
 
 AsyncWebHandler &AsyncWebServer::addHandler(AsyncWebHandler *handler) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_handleLock);
+#endif
   _handlers.emplace_back(handler);
   return *(_handlers.back().get());
 }
 
 bool AsyncWebServer::removeHandler(AsyncWebHandler *handler) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_handleLock);
+#endif
   for (auto i = _handlers.begin(); i != _handlers.end(); ++i) {
     if (i->get() == handler) {
       _handlers.erase(i);
@@ -121,6 +139,9 @@ void AsyncWebServer::_handleDisconnect(AsyncWebServerRequest *request) {
 }
 
 void AsyncWebServer::_rewriteRequest(AsyncWebServerRequest *request) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_rewriteLock);
+#endif
   // the last rewrite that matches the request will be used
   // we do not break the loop to allow for multiple rewrites to be applied and only the last one to be used (allows overriding)
   for (const auto &r : _rewrites) {
@@ -132,6 +153,9 @@ void AsyncWebServer::_rewriteRequest(AsyncWebServerRequest *request) {
 }
 
 void AsyncWebServer::_attachHandler(AsyncWebServerRequest *request) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_handleLock);
+#endif
   for (auto &h : _handlers) {
     if (h->filter(request) && h->canHandle(request)) {
       request->setHandler(h.get());
@@ -178,6 +202,10 @@ AsyncWebHandler &AsyncWebServer::catchAllHandler() const {
 }
 
 void AsyncWebServer::reset() {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock1(_rewriteLock);
+  std::lock_guard<std::recursive_mutex> lock2(_handleLock);
+#endif
   _rewrites.clear();
   _handlers.clear();
 

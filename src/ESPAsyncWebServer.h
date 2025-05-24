@@ -20,6 +20,7 @@
 #ifdef ESP32
 #include <AsyncTCP.h>
 #include <WiFi.h>
+#include <mutex>
 #elif defined(ESP8266)
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
@@ -219,6 +220,11 @@ private:
   size_t _contentLength;
   size_t _parsedLength;
 
+#ifdef ESP32
+  mutable std::recursive_mutex _headerLock;
+  mutable std::recursive_mutex _paramsLock;
+  mutable std::recursive_mutex _pathParamsLock;
+#endif
   std::list<AsyncWebHeader> _headers;
   std::list<AsyncWebParameter> _params;
   std::list<String> _pathParams;
@@ -1015,6 +1021,9 @@ typedef enum {
 class AsyncWebServerResponse {
 protected:
   int _code;
+#ifdef ESP32
+  mutable std::recursive_mutex _headerLock;
+#endif
   std::list<AsyncWebHeader> _headers;
   String _contentType;
   size_t _contentLength;
@@ -1033,7 +1042,7 @@ public:
 
 public:
   AsyncWebServerResponse();
-  virtual ~AsyncWebServerResponse() {}
+  virtual ~AsyncWebServerResponse();
   void setCode(int code);
   int code() const {
     return _code;
@@ -1090,6 +1099,10 @@ typedef std::function<void(AsyncWebServerRequest *request, uint8_t *data, size_t
 class AsyncWebServer : public AsyncMiddlewareChain {
 protected:
   AsyncServer _server;
+#ifdef ESP32
+  mutable std::recursive_mutex _rewriteLock;
+  mutable std::recursive_mutex _handleLock;
+#endif
   std::list<std::shared_ptr<AsyncWebRewrite>> _rewrites;
   std::list<std::unique_ptr<AsyncWebHandler>> _handlers;
   AsyncCallbackWebHandler *_catchAllHandler;

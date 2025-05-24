@@ -85,9 +85,17 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
 AsyncWebServerRequest::~AsyncWebServerRequest() {
   // log_e("AsyncWebServerRequest::~AsyncWebServerRequest");
 
+#ifdef ESP32
+    std::lock_guard<std::recursive_mutex> lock1(_headerLock);
+    std::lock_guard<std::recursive_mutex> lock2(_paramsLock);
+    std::lock_guard<std::recursive_mutex> lock3(_pathParamsLock);
+#endif
+
   _this.reset();
 
   _headers.clear();
+
+  _params.clear();
 
   _pathParams.clear();
 
@@ -266,10 +274,14 @@ void AsyncWebServerRequest::_onDisconnect() {
   if (_onDisconnectfn) {
     _onDisconnectfn();
   }
+  _client = nullptr;
   _server->_handleDisconnect(this);
 }
 
 void AsyncWebServerRequest::_addPathParam(const char *p) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock3(_pathParamsLock);
+#endif
   _pathParams.emplace_back(p);
 }
 
@@ -287,6 +299,9 @@ void AsyncWebServerRequest::_addGetParams(const String &params) {
     String name = urlDecode(params.substring(start, equal));
     String value = urlDecode(equal + 1 < end ? params.substring(equal + 1, end) : emptyString);
     if (name.length()) {
+#ifdef ESP32
+      std::lock_guard<std::recursive_mutex> lock(_paramsLock);
+#endif
       _params.emplace_back(name, value);
     }
     start = end + 1;
@@ -392,6 +407,9 @@ bool AsyncWebServerRequest::_parseReqHeader() {
         _reqconntype = RCT_EVENT;
       }
     }
+#ifdef ESP32
+    std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
     _headers.emplace_back(name, value);
   }
 #if defined(TARGET_RP2040) || defined(TARGET_RP2350) || defined(PICO_RP2040) || defined(PICO_RP2350)
@@ -416,6 +434,9 @@ void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data) {
     }
     name = urlDecode(name);
     if (name.length()) {
+#ifdef ESP32
+      std::lock_guard<std::recursive_mutex> lock(_paramsLock);
+#endif
       _params.emplace_back(name, urlDecode(value), true);
     }
 
@@ -592,6 +613,9 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last) {
       }
       _parseMultipartPostByte(data, last);
     } else if (_boundaryPosition == _boundary.length() - 1) {
+#ifdef ESP32
+      std::lock_guard<std::recursive_mutex> lock(_paramsLock);
+#endif
       _multiParseState = DASH3_OR_RETURN2;
       if (!_itemIsFile) {
         _params.emplace_back(_itemName, _itemValue, true);
@@ -749,10 +773,16 @@ void AsyncWebServerRequest::abort() {
 }
 
 size_t AsyncWebServerRequest::headers() const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   return _headers.size();
 }
 
 bool AsyncWebServerRequest::hasHeader(const char *name) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   for (const auto &h : _headers) {
     if (h.name().equalsIgnoreCase(name)) {
       return true;
@@ -768,6 +798,9 @@ bool AsyncWebServerRequest::hasHeader(const __FlashStringHelper *data) const {
 #endif
 
 const AsyncWebHeader *AsyncWebServerRequest::getHeader(const char *name) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   auto iter = std::find_if(std::begin(_headers), std::end(_headers), [&name](const AsyncWebHeader &header) {
     return header.name().equalsIgnoreCase(name);
   });
@@ -791,6 +824,9 @@ const AsyncWebHeader *AsyncWebServerRequest::getHeader(const __FlashStringHelper
 #endif
 
 const AsyncWebHeader *AsyncWebServerRequest::getHeader(size_t num) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   if (num >= _headers.size()) {
     return nullptr;
   }
@@ -798,6 +834,9 @@ const AsyncWebHeader *AsyncWebServerRequest::getHeader(size_t num) const {
 }
 
 size_t AsyncWebServerRequest::getHeaderNames(std::vector<const char *> &names) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   const size_t size = names.size();
   for (const auto &h : _headers) {
     names.push_back(h.name().c_str());
@@ -806,6 +845,9 @@ size_t AsyncWebServerRequest::getHeaderNames(std::vector<const char *> &names) c
 }
 
 bool AsyncWebServerRequest::removeHeader(const char *name) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   const size_t size = _headers.size();
   _headers.remove_if([name](const AsyncWebHeader &header) {
     return header.name().equalsIgnoreCase(name);
@@ -814,10 +856,16 @@ bool AsyncWebServerRequest::removeHeader(const char *name) {
 }
 
 size_t AsyncWebServerRequest::params() const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_paramsLock);
+#endif
   return _params.size();
 }
 
 bool AsyncWebServerRequest::hasParam(const char *name, bool post, bool file) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_paramsLock);
+#endif
   for (const auto &p : _params) {
     if (p.name().equals(name) && p.isPost() == post && p.isFile() == file) {
       return true;
@@ -827,6 +875,9 @@ bool AsyncWebServerRequest::hasParam(const char *name, bool post, bool file) con
 }
 
 const AsyncWebParameter *AsyncWebServerRequest::getParam(const char *name, bool post, bool file) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_paramsLock);
+#endif
   for (const auto &p : _params) {
     if (p.name() == name && p.isPost() == post && p.isFile() == file) {
       return &p;
@@ -842,6 +893,9 @@ const AsyncWebParameter *AsyncWebServerRequest::getParam(const __FlashStringHelp
 #endif
 
 const AsyncWebParameter *AsyncWebServerRequest::getParam(size_t num) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_paramsLock);
+#endif
   if (num >= _params.size()) {
     return nullptr;
   }
@@ -1044,6 +1098,9 @@ void AsyncWebServerRequest::requestAuthentication(AsyncAuthType method, const ch
 }
 
 bool AsyncWebServerRequest::hasArg(const char *name) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_paramsLock);
+#endif
   for (const auto &arg : _params) {
     if (arg.name() == name) {
       return true;
@@ -1059,6 +1116,9 @@ bool AsyncWebServerRequest::hasArg(const __FlashStringHelper *data) const {
 #endif
 
 const String &AsyncWebServerRequest::arg(const char *name) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_paramsLock);
+#endif
   for (const auto &arg : _params) {
     if (arg.name() == name) {
       return arg.value();
@@ -1082,6 +1142,9 @@ const String &AsyncWebServerRequest::argName(size_t i) const {
 }
 
 const String &AsyncWebServerRequest::pathArg(size_t i) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock3(_pathParamsLock);
+#endif
   if (i >= _pathParams.size()) {
     return emptyString;
   }

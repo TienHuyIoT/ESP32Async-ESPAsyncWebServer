@@ -77,6 +77,13 @@ AsyncWebServerResponse::AsyncWebServerResponse()
   }
 }
 
+AsyncWebServerResponse::~AsyncWebServerResponse() {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
+  _headers.clear();
+}
+
 void AsyncWebServerResponse::setCode(int code) {
   if (_state == RESPONSE_SETUP) {
     _code = code;
@@ -96,6 +103,9 @@ void AsyncWebServerResponse::setContentType(const char *type) {
 }
 
 bool AsyncWebServerResponse::removeHeader(const char *name) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   bool h_erased = false;
   for (auto i = _headers.begin(); i != _headers.end();) {
     if (i->name().equalsIgnoreCase(name)) {
@@ -109,6 +119,9 @@ bool AsyncWebServerResponse::removeHeader(const char *name) {
 }
 
 bool AsyncWebServerResponse::removeHeader(const char *name, const char *value) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   for (auto i = _headers.begin(); i != _headers.end(); ++i) {
     if (i->name().equalsIgnoreCase(name) && i->value().equalsIgnoreCase(value)) {
       _headers.erase(i);
@@ -119,6 +132,9 @@ bool AsyncWebServerResponse::removeHeader(const char *name, const char *value) {
 }
 
 const AsyncWebHeader *AsyncWebServerResponse::getHeader(const char *name) const {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   auto iter = std::find_if(std::begin(_headers), std::end(_headers), [&name](const AsyncWebHeader &header) {
     return header.name().equalsIgnoreCase(name);
   });
@@ -135,6 +151,9 @@ bool AsyncWebServerResponse::headerMustBePresentOnce(const String &name) {
 }
 
 bool AsyncWebServerResponse::addHeader(const char *name, const char *value, bool replaceExisting) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   for (auto i = _headers.begin(); i != _headers.end(); ++i) {
     if (i->name().equalsIgnoreCase(name)) {
       // header already set
@@ -156,6 +175,9 @@ bool AsyncWebServerResponse::addHeader(const char *name, const char *value, bool
 }
 
 void AsyncWebServerResponse::_assembleHead(String &buffer, uint8_t version) {
+#ifdef ESP32
+  std::lock_guard<std::recursive_mutex> lock(_headerLock);
+#endif
   if (version) {
     addHeader(T_Accept_Ranges, T_none, false);
     if (_chunked) {
