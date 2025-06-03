@@ -269,6 +269,7 @@ private:
 public:
   File _tempFile;
   void *_tempObject;
+  size_t _tempSize;
 
   AsyncWebServerRequest(AsyncWebServer *, AsyncClient *);
   ~AsyncWebServerRequest();

@@ -28,11 +28,11 @@ String generateBasicHash(const char *username, const char *password) {
 
   size_t toencodeLen = strlen(username) + strlen(password) + 1;
 
-  char *toencode = new char[toencodeLen + 1];
+  char *toencode = new (std::nothrow) char[toencodeLen + 1];
   if (toencode == NULL) {
     return emptyString;
   }
-  char *encoded = new char[base64_encode_expected_len(toencodeLen) + 1];
+  char *encoded = new (std::nothrow) char[base64_encode_expected_len(toencodeLen) + 1];
   if (encoded == NULL) {
     delete[] toencode;
     return emptyString;

@@ -71,7 +71,14 @@ size_t webSocketSendFrame(AsyncClient *client, bool final, uint8_t opcode, bool 
 #ifdef ESP32
     log_e("Failed to allocate");
 #endif
+#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
+    asynctcp_callback([](void *arg) {
+      AsyncClient *wsClient = (AsyncClient*)arg;
+      wsClient->abort();
+    }, client);
+#else
     client->abort();
+#endif
     return 0;
   }
 
@@ -378,7 +385,14 @@ void AsyncWebSocketClient::_onAck(size_t len, uint32_t time) {
           */
           lock.unlock();
 #endif
+#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
+          asynctcp_callback([](void *arg) {
+            AsyncClient *client = (AsyncClient*)arg;
+            client->close(true);
+          }, _client);
+#else
           _client->close(true);
+#endif
         }
         return;
       }
@@ -488,7 +502,14 @@ bool AsyncWebSocketClient::_queueMessage(AsyncWebSocketSharedBuffer buffer, uint
         */
         lock.unlock();
 #endif
-        _client->close(true);
+#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
+          asynctcp_callback([](void *arg) {
+            AsyncClient *client = (AsyncClient*)arg;
+            client->close(true);
+          }, _client);
+#else
+          _client->close(true);
+#endif
       }
 
 #ifdef ESP8266
@@ -546,7 +567,7 @@ void AsyncWebSocketClient::close(uint16_t code, const char *message) {
     } else {
 #ifdef ESP32
       log_e("Failed to allocate");
-      _client->abort();
+      // _client->abort();
 #endif
     }
   }
@@ -567,7 +588,14 @@ void AsyncWebSocketClient::_onTimeout(uint32_t time) {
   }
   ASYNC_WS_CONSOLE_DEBUG("onTimeout = %u", time);
   (void)time;
+#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
+  asynctcp_callback([](void *arg) {
+    AsyncClient *client = (AsyncClient *)arg;
+    client->close(true);
+  }, _client);
+#else
   _client->close(true);
+#endif
 }
 
 void AsyncWebSocketClient::_onDisconnect() {
@@ -702,7 +730,7 @@ size_t AsyncWebSocketClient::printf(const char *format, ...) {
     return 0;
   }
 
-  char *buffer = new char[len + 1];
+  char *buffer = new (std::nothrow) char[len + 1];
 
   if (!buffer) {
     return 0;
@@ -728,7 +756,7 @@ size_t AsyncWebSocketClient::printf_P(PGM_P formatP, ...) {
     return 0;
   }
 
-  char *buffer = new char[len + 1];
+  char *buffer = new (std::nothrow) char[len + 1];
 
   if (!buffer) {
     return 0;
@@ -1299,7 +1327,7 @@ size_t AsyncWebSocket::printfAll_P(PGM_P formatP, ...) {
     return 0;
   }
 
-  char *buffer = new char[len + 1];
+  char *buffer = new (std::nothrow) char[len + 1];
 
   if (!buffer) {
     return 0;
@@ -1360,7 +1388,7 @@ void AsyncWebSocket::handleRequest(AsyncWebServerRequest *request) {
     return;
   }
   const AsyncWebHeader *key = request->getHeader(WS_STR_KEY);
-  AsyncWebServerResponse *response = new AsyncWebSocketResponse(key->value(), this);
+  AsyncWebServerResponse *response = new (std::nothrow) AsyncWebSocketResponse(key->value(), this);
   if (response == NULL) {
 #ifdef ESP32
     log_e("Failed to allocate");
@@ -1377,7 +1405,7 @@ void AsyncWebSocket::handleRequest(AsyncWebServerRequest *request) {
 }
 
 AsyncWebSocketMessageBuffer *AsyncWebSocket::makeBuffer(size_t size) {
-  AsyncWebSocketMessageBuffer *buffer = new AsyncWebSocketMessageBuffer(size);
+  AsyncWebSocketMessageBuffer *buffer = new (std::nothrow) AsyncWebSocketMessageBuffer(size);
   if (buffer) {
     if (buffer->length() < size) {
       delete buffer;
@@ -1388,7 +1416,7 @@ AsyncWebSocketMessageBuffer *AsyncWebSocket::makeBuffer(size_t size) {
 }
 
 AsyncWebSocketMessageBuffer *AsyncWebSocket::makeBuffer(const uint8_t *data, size_t size) {
-  AsyncWebSocketMessageBuffer *buffer = new AsyncWebSocketMessageBuffer(data, size);
+  AsyncWebSocketMessageBuffer *buffer = new (std::nothrow) AsyncWebSocketMessageBuffer(data, size);
   if (buffer) {
     if (buffer->length() < size) {
       delete buffer;
@@ -1438,7 +1466,14 @@ AsyncWebSocketResponse::AsyncWebSocketResponse(const String &key, AsyncWebSocket
 
 void AsyncWebSocketResponse::_respond(AsyncWebServerRequest *request) {
   if (_state == RESPONSE_FAILED) {
+#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
+    asynctcp_callback([](void *arg) {
+      AsyncClient *client = (AsyncClient*)arg;
+      client->close(true);
+    }, request->client());
+#else
     request->client()->close(true);
+#endif
     return;
   }
   String out;

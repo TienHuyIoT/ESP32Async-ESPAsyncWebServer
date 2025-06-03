@@ -233,9 +233,9 @@ void AsyncStaticWebHandler::handleRequest(AsyncWebServerRequest *request) {
 
   if (not_modified) {
     request->_tempFile.close();
-    response = new AsyncBasicResponse(304);  // Not modified
+    response = new (std::nothrow) AsyncBasicResponse(304);  // Not modified
   } else {
-    response = new AsyncFileResponse(request->_tempFile, filename, emptyString, false, _callback);
+    response = new (std::nothrow) AsyncFileResponse(request->_tempFile, filename, emptyString, false, _callback);
   }
 
   if (!response) {

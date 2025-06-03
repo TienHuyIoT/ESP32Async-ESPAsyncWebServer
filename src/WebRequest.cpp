@@ -7,6 +7,8 @@
 #include "literals.h"
 #include <cstring>
 
+#define ASYNC_REQUEST_CONSOLE_DEBUG(f_, ...)  //Serial.printf_P(PSTR("\n\n[Async Request] %s line %u: " f_ "\n"),  __func__, __LINE__, ##__VA_ARGS__)
+
 #define __is_param_char(c) ((c) && ((c) != '{') && ((c) != '[') && ((c) != '&') && ((c) != '='))
 
 static void doNotDelete(AsyncWebServerRequest *) {}
@@ -25,7 +27,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   : _client(c), _server(s), _handler(NULL), _response(NULL), _temp(), _parseState(PARSE_REQ_START), _version(0), _method(HTTP_ANY), _url(), _host(),
     _contentType(), _boundary(), _authorization(), _reqconntype(RCT_HTTP), _authMethod(AsyncAuthType::AUTH_NONE), _isMultipart(false), _isPlainPost(false),
     _expectingContinue(false), _contentLength(0), _parsedLength(0), _multiParseState(0), _boundaryPosition(0), _itemStartIndex(0), _itemSize(0), _itemName(),
-    _itemFilename(), _itemType(), _itemValue(), _itemBuffer(0), _itemBufferIndex(0), _itemIsFile(false), _tempObject(NULL) {
+    _itemFilename(), _itemType(), _itemValue(), _itemBuffer(0), _itemBufferIndex(0), _itemIsFile(false), _tempObject(NULL), _tempSize(0) {
   c->onError(
     [](void *r, AsyncClient *c, int8_t error) {
       (void)c;
@@ -99,9 +101,12 @@ AsyncWebServerRequest::~AsyncWebServerRequest() {
 
   _pathParams.clear();
 
-  AsyncWebServerResponse *r = _response;
-  _response = NULL;
-  delete r;
+  // Has to check the response pointer due to it can be nullpoint from _onPoll() or _onAck()
+  if (_response) {
+    AsyncWebServerResponse *r = _response;
+    _response = NULL;
+    delete r;
+  }
 
   if (_tempObject != NULL) {
     free(_tempObject);
@@ -234,8 +239,14 @@ void AsyncWebServerRequest::_onPoll() {
       AsyncWebServerResponse *r = _response;
       _response = NULL;
       delete r;
-
+#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
+      asynctcp_callback([](void *arg) {
+        AsyncClient *client = (AsyncClient*)arg;
+        client->close();
+      }, _client);
+#else
       _client->close();
+#endif
     }
   }
 }
@@ -249,8 +260,14 @@ void AsyncWebServerRequest::_onAck(size_t len, uint32_t time) {
       AsyncWebServerResponse *r = _response;
       _response = NULL;
       delete r;
-
+#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
+      asynctcp_callback([](void *arg) {
+        AsyncClient *client = (AsyncClient*)arg;
+        client->close();
+      }, _client);
+#else
       _client->close();
+#endif
     }
   }
 }
@@ -262,7 +279,14 @@ void AsyncWebServerRequest::_onError(int8_t error) {
 void AsyncWebServerRequest::_onTimeout(uint32_t time) {
   (void)time;
   // os_printf("TIMEOUT: %u, state: %s\n", time, _client->stateToString());
+#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
+  asynctcp_callback([](void *arg) {
+    AsyncClient *client = (AsyncClient*)arg;
+    client->close();
+  }, _client);
+#else
   _client->close();
+#endif
 }
 
 void AsyncWebServerRequest::onDisconnect(ArDisconnectHandler fn) {
@@ -768,7 +792,14 @@ void AsyncWebServerRequest::abort() {
     _paused = false;
     _this.reset();
     // log_e("AsyncWebServerRequest::abort");
+#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
+    asynctcp_callback([](void *arg) {
+      AsyncClient *client = (AsyncClient*)arg;
+      client->abort();
+    }, _client);
+#else
     _client->abort();
+#endif
   }
 }
 
