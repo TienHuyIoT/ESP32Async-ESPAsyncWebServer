@@ -325,14 +325,7 @@ void AsyncEventSourceClient::_onPoll() {
 
 void AsyncEventSourceClient::_onTimeout(uint32_t time __attribute__((unused))) {
   if (_client) {
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-    asynctcp_callback([](void *arg) {
-      AsyncClient *client = (AsyncClient*)arg;
-      client->close(true);
-    }, _client);
-#else
-    _client->close(true);
-#endif
+    _client->close();
   }
 }
 
@@ -346,14 +339,7 @@ void AsyncEventSourceClient::_onDisconnect() {
 
 void AsyncEventSourceClient::close() {
   if (_client) {
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-    asynctcp_callback([](void *arg) {
-      AsyncClient *client = (AsyncClient*)arg;
-      client->close();
-    }, _client);
-#else
     _client->close();
-#endif
   }
 }
 

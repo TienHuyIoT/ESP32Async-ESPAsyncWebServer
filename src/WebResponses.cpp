@@ -246,14 +246,7 @@ bool AsyncWebServerResponse::_sourceValid() const {
 }
 void AsyncWebServerResponse::_respond(AsyncWebServerRequest *request) {
   _state = RESPONSE_END;
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-  asynctcp_callback([](void *arg) {
-    AsyncClient *client = (AsyncClient*)arg;
-    client->close();
-  }, request->client());
-#else
   request->client()->close();
-#endif
 }
 size_t AsyncWebServerResponse::_ack(AsyncWebServerRequest *request, size_t len, uint32_t time) {
   (void)request;
@@ -364,14 +357,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
   (void)time;
   if (!_sourceValid()) {
     _state = RESPONSE_FAILED;
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-    asynctcp_callback([](void *arg) {
-      AsyncClient *client = (AsyncClient*)arg;
-      client->close();
-    }, request->client());
-#else
     request->client()->close();
-#endif
     return 0;
   }
 
@@ -509,14 +495,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
     if (!_sendContentLength || _ackedLength >= _writtenLength) {
       _state = RESPONSE_END;
       if (!_chunked && !_sendContentLength) {
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-        asynctcp_callback([](void *arg) {
-          AsyncClient *client = (AsyncClient*)arg;
-          client->close(true);
-        }, request->client());
-#else
         request->client()->close(true);
-#endif
       }
     }
   }

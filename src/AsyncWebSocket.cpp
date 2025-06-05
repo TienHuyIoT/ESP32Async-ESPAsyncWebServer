@@ -71,14 +71,7 @@ size_t webSocketSendFrame(AsyncClient *client, bool final, uint8_t opcode, bool 
 #ifdef ESP32
     log_e("Failed to allocate");
 #endif
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-    asynctcp_callback([](void *arg) {
-      AsyncClient *wsClient = (AsyncClient*)arg;
-      wsClient->abort();
-    }, client);
-#else
     client->abort();
-#endif
     return 0;
   }
 
@@ -385,14 +378,7 @@ void AsyncWebSocketClient::_onAck(size_t len, uint32_t time) {
           */
           lock.unlock();
 #endif
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-          asynctcp_callback([](void *arg) {
-            AsyncClient *client = (AsyncClient*)arg;
-            client->close(true);
-          }, _client);
-#else
-          _client->close(true);
-#endif
+          _client->close();
         }
         return;
       }
@@ -502,14 +488,7 @@ bool AsyncWebSocketClient::_queueMessage(AsyncWebSocketSharedBuffer buffer, uint
         */
         lock.unlock();
 #endif
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-          asynctcp_callback([](void *arg) {
-            AsyncClient *client = (AsyncClient*)arg;
-            client->close(true);
-          }, _client);
-#else
-          _client->close(true);
-#endif
+        _client->close();
       }
 
 #ifdef ESP8266
@@ -588,14 +567,7 @@ void AsyncWebSocketClient::_onTimeout(uint32_t time) {
   }
   ASYNC_WS_CONSOLE_DEBUG("onTimeout = %u", time);
   (void)time;
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-  asynctcp_callback([](void *arg) {
-    AsyncClient *client = (AsyncClient *)arg;
-    client->close(true);
-  }, _client);
-#else
-  _client->close(true);
-#endif
+  _client->close();
 }
 
 void AsyncWebSocketClient::_onDisconnect() {
@@ -1466,14 +1438,7 @@ AsyncWebSocketResponse::AsyncWebSocketResponse(const String &key, AsyncWebSocket
 
 void AsyncWebSocketResponse::_respond(AsyncWebServerRequest *request) {
   if (_state == RESPONSE_FAILED) {
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-    asynctcp_callback([](void *arg) {
-      AsyncClient *client = (AsyncClient*)arg;
-      client->close(true);
-    }, request->client());
-#else
     request->client()->close(true);
-#endif
     return;
   }
   String out;

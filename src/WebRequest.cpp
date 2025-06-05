@@ -239,14 +239,7 @@ void AsyncWebServerRequest::_onPoll() {
       AsyncWebServerResponse *r = _response;
       _response = NULL;
       delete r;
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-      asynctcp_callback([](void *arg) {
-        AsyncClient *client = (AsyncClient*)arg;
-        client->close();
-      }, _client);
-#else
       _client->close();
-#endif
     }
   }
 }
@@ -260,14 +253,7 @@ void AsyncWebServerRequest::_onAck(size_t len, uint32_t time) {
       AsyncWebServerResponse *r = _response;
       _response = NULL;
       delete r;
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-      asynctcp_callback([](void *arg) {
-        AsyncClient *client = (AsyncClient*)arg;
-        client->close();
-      }, _client);
-#else
       _client->close();
-#endif
     }
   }
 }
@@ -279,14 +265,7 @@ void AsyncWebServerRequest::_onError(int8_t error) {
 void AsyncWebServerRequest::_onTimeout(uint32_t time) {
   (void)time;
   // os_printf("TIMEOUT: %u, state: %s\n", time, _client->stateToString());
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-  asynctcp_callback([](void *arg) {
-    AsyncClient *client = (AsyncClient*)arg;
-    client->close();
-  }, _client);
-#else
   _client->close();
-#endif
 }
 
 void AsyncWebServerRequest::onDisconnect(ArDisconnectHandler fn) {
@@ -792,14 +771,7 @@ void AsyncWebServerRequest::abort() {
     _paused = false;
     _this.reset();
     // log_e("AsyncWebServerRequest::abort");
-#if (defined ASYNC_TCP_CALLBACK_IMPL) && (ASYNC_TCP_CALLBACK_IMPL == 1)
-    asynctcp_callback([](void *arg) {
-      AsyncClient *client = (AsyncClient*)arg;
-      client->abort();
-    }, _client);
-#else
     _client->abort();
-#endif
   }
 }
 
