@@ -22,6 +22,7 @@
 using namespace asyncsrv;
 
 #define ASYNC_WS_CONSOLE_DEBUG(f_, ...)  //Serial.printf_P(PSTR("\n\n[Async WS] %s line %u: " f_ "\n"),  __func__, __LINE__, ##__VA_ARGS__)
+#define ASYNC_WS_RESPONSE_DEBUG(f_, ...) //Serial.printf_P(PSTR("[Async WS] %s line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
 
 size_t webSocketSendFrameWindow(AsyncClient *client) {
   if (!client || !client->canSend()) {
@@ -1361,6 +1362,8 @@ void AsyncWebSocket::handleRequest(AsyncWebServerRequest *request) {
   }
   const AsyncWebHeader *key = request->getHeader(WS_STR_KEY);
   AsyncWebServerResponse *response = new (std::nothrow) AsyncWebSocketResponse(key->value(), this);
+  ASYNC_WS_RESPONSE_DEBUG("New response = %u of %u", response, request);
+
   if (response == NULL) {
 #ifdef ESP32
     log_e("Failed to allocate");

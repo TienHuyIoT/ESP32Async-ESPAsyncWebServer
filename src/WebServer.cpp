@@ -4,6 +4,7 @@
 #include "ESPAsyncWebServer.h"
 #include "WebHandlerImpl.h"
 
+#define ASYNC_SERVER_CONSOLE_DEBUG(f_, ...)  //Serial.printf_P(PSTR("[WebServer] %s line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
 using namespace asyncsrv;
 
 bool ON_STA_FILTER(AsyncWebServerRequest *request) {
@@ -37,6 +38,7 @@ AsyncWebServer::AsyncWebServer(uint16_t port) : _server(port) {
       }
       c->setRxTimeout(3);
       AsyncWebServerRequest *r = new (std::nothrow) AsyncWebServerRequest((AsyncWebServer *)s, c);
+      ASYNC_SERVER_CONSOLE_DEBUG("server %u, New client %u, request %u", c, s, r);
       if (r == NULL) {
         c->abort();
         delete c;
@@ -135,6 +137,7 @@ void AsyncWebServer::beginSecure(const char *cert, const char *key, const char *
 #endif
 
 void AsyncWebServer::_handleDisconnect(AsyncWebServerRequest *request) {
+  ASYNC_SERVER_CONSOLE_DEBUG("Delete request %u", request);
   delete request;
 }
 

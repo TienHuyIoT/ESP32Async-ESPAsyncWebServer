@@ -7,7 +7,7 @@
 #include "literals.h"
 #include <cstring>
 
-#define ASYNC_REQUEST_CONSOLE_DEBUG(f_, ...)  //Serial.printf_P(PSTR("\n\n[Async Request] %s line %u: " f_ "\n"),  __func__, __LINE__, ##__VA_ARGS__)
+#define ASYNC_REQUEST_CONSOLE_DEBUG(f_, ...)  //Serial.printf_P(PSTR("[WebRequest] %s line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
 
 #define __is_param_char(c) ((c) && ((c) != '{') && ((c) != '[') && ((c) != '&') && ((c) != '='))
 
@@ -82,10 +82,12 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
     },
     this
   );
+  ASYNC_REQUEST_CONSOLE_DEBUG("New request = %u", this);
 }
 
 AsyncWebServerRequest::~AsyncWebServerRequest() {
   // log_e("AsyncWebServerRequest::~AsyncWebServerRequest");
+  ASYNC_REQUEST_CONSOLE_DEBUG("Delete request = %u", this);
 
 #ifdef ESP32
     std::lock_guard<std::recursive_mutex> lock1(_headerLock);
@@ -105,6 +107,7 @@ AsyncWebServerRequest::~AsyncWebServerRequest() {
   if (_response) {
     AsyncWebServerResponse *r = _response;
     _response = NULL;
+    ASYNC_REQUEST_CONSOLE_DEBUG("Delete response = %u of %u", r, this);
     delete r;
   }
 
@@ -987,9 +990,11 @@ void AsyncWebServerRequest::send(AsyncWebServerResponse *response) {
 
   // if we already had a response, delete it and replace it with the new one
   if (_response) {
+    ASYNC_REQUEST_CONSOLE_DEBUG("Delete response = %u of %u", _response, this);
     delete _response;
   }
   _response = response;
+  ASYNC_REQUEST_CONSOLE_DEBUG("Register response = %u of %u", _response, this);
 
   // if request was paused, we need to send the response now
   if (_paused) {
