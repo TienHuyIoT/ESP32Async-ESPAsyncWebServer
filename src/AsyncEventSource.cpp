@@ -205,7 +205,9 @@ AsyncEventSourceClient::AsyncEventSourceClient(AsyncWebServerRequest *request, A
   _client->onDisconnect(
     [this](void *r, AsyncClient *c) {
       static_cast<AsyncEventSourceClient *>(r)->_onDisconnect();
-      delete c;
+      if (c) {
+        delete c;
+      }
     },
     this
   );
@@ -330,9 +332,6 @@ void AsyncEventSourceClient::_onTimeout(uint32_t time __attribute__((unused))) {
 }
 
 void AsyncEventSourceClient::_onDisconnect() {
-  if (!_client) {
-    return;
-  }
   _client = nullptr;
   _server->_handleDisconnect(this);
 }

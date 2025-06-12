@@ -41,7 +41,7 @@ AsyncWebServer::AsyncWebServer(uint16_t port) : _server(port) {
       ASYNC_SERVER_CONSOLE_DEBUG("server %u, New client %u, request %u", c, s, r);
       if (r == NULL) {
         c->abort();
-        delete c;
+        // delete c;
       }
     },
     this

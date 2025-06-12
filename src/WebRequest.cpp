@@ -51,7 +51,9 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
       // log_e("AsyncWebServerRequest::_onDisconnect");
       AsyncWebServerRequest *req = (AsyncWebServerRequest *)r;
       req->_onDisconnect();
-      delete c;
+      if (c) {
+        delete c;
+      }
     },
     this
   );
@@ -235,7 +237,7 @@ void AsyncWebServerRequest::_onData(void *buf, size_t len) {
 
 void AsyncWebServerRequest::_onPoll() {
   // os_printf("p\n");
-  if (_response != NULL && _client != NULL && _client->canSend()) {
+  if (_response && _client && _client->canSend()) {
     if (!_response->_finished()) {
       _response->_ack(this, 0, 0);
     } else {
@@ -249,14 +251,16 @@ void AsyncWebServerRequest::_onPoll() {
 
 void AsyncWebServerRequest::_onAck(size_t len, uint32_t time) {
   // os_printf("a:%u:%u\n", len, time);
-  if (_response != NULL) {
+  if (_response) {
     if (!_response->_finished()) {
       _response->_ack(this, len, time);
     } else if (_response->_finished()) {
       AsyncWebServerResponse *r = _response;
       _response = NULL;
       delete r;
-      _client->close();
+      if (_client) {
+        _client->close();
+      }
     }
   }
 }
@@ -268,7 +272,9 @@ void AsyncWebServerRequest::_onError(int8_t error) {
 void AsyncWebServerRequest::_onTimeout(uint32_t time) {
   (void)time;
   // os_printf("TIMEOUT: %u, state: %s\n", time, _client->stateToString());
-  _client->close();
+  if (_client) {
+    _client->close();
+  }
 }
 
 void AsyncWebServerRequest::onDisconnect(ArDisconnectHandler fn) {

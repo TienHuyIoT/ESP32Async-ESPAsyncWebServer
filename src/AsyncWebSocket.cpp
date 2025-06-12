@@ -306,7 +306,9 @@ AsyncWebSocketClient::AsyncWebSocketClient(AsyncWebServerRequest *request, Async
   _client->onDisconnect(
     [](void *r, AsyncClient *c) {
       ((AsyncWebSocketClient *)(r))->_onDisconnect();
-      delete c;
+      if (c) {
+        delete c;
+      }
     },
     this
   );
@@ -563,12 +565,11 @@ void AsyncWebSocketClient::_onError(int8_t error) {
 }
 
 void AsyncWebSocketClient::_onTimeout(uint32_t time) {
-  if (!_client) {
-    return;
-  }
   ASYNC_WS_CONSOLE_DEBUG("onTimeout = %u", time);
   (void)time;
-  _client->close();
+  if (_client) {
+    _client->close();
+  }
 }
 
 void AsyncWebSocketClient::_onDisconnect() {
