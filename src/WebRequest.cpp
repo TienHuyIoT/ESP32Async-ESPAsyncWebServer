@@ -410,9 +410,9 @@ bool AsyncWebServerRequest::_parseReqHeader() {
       String lowcase(value);
       lowcase.toLowerCase();
 #ifndef ESP8266
-      const char *substr = std::strstr(lowcase.c_str(), T_text_event_stream);
+      const char *substr = strstr(lowcase.c_str(), T_text_event_stream);
 #else
-      const char *substr = std::strstr(lowcase.c_str(), String(T_text_event_stream).c_str());
+      const char *substr = strstr(lowcase.c_str(), String(T_text_event_stream).c_str());
 #endif
       if (substr != NULL) {
         // WebEvent request can be uniquely identified by header:  [Accept: text/event-stream]
