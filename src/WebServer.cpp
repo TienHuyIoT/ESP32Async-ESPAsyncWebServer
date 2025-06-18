@@ -5,6 +5,8 @@
 #include "WebHandlerImpl.h"
 
 #define ASYNC_SERVER_CONSOLE_DEBUG(f_, ...)  //Serial.printf_P(PSTR("[WebServer] %s line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
+#define SERVER_RX_TIMEOUT 5 // Seconds for timeout
+
 using namespace asyncsrv;
 
 bool ON_STA_FILTER(AsyncWebServerRequest *request) {
@@ -36,7 +38,7 @@ AsyncWebServer::AsyncWebServer(uint16_t port) : _server(port) {
       if (c == NULL) {
         return;
       }
-      c->setRxTimeout(3);
+      c->setRxTimeout(SERVER_RX_TIMEOUT);
       AsyncWebServerRequest *r = new (std::nothrow) AsyncWebServerRequest((AsyncWebServer *)s, c);
       ASYNC_SERVER_CONSOLE_DEBUG("server %u, New client %u, request %u", c, s, r);
       if (r == NULL) {
