@@ -1109,10 +1109,10 @@ protected:
   AsyncCallbackWebHandler *_catchAllHandler;
 
 public:
-  AsyncWebServer(uint16_t port);
+  AsyncWebServer(uint16_t port = 80);
   ~AsyncWebServer();
 
-  void begin();
+  bool begin(uint16_t port = 0);
   void end();
 
 #if ESP_IDF_VERSION_MAJOR >= 4

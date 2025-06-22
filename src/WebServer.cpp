@@ -119,9 +119,9 @@ bool AsyncWebServer::removeHandler(AsyncWebHandler *handler) {
   return false;
 }
 
-void AsyncWebServer::begin() {
+bool AsyncWebServer::begin(uint16_t port) {
   _server.setNoDelay(true);
-  _server.begin();
+  return _server.begin(port);
 }
 
 void AsyncWebServer::end() {
