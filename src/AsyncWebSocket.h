@@ -36,7 +36,7 @@
 
 #ifndef DEFAULT_MAX_WS_CLIENTS
 #ifdef ESP32
-#define DEFAULT_MAX_WS_CLIENTS 5
+#define DEFAULT_MAX_WS_CLIENTS 8
 #else
 #define DEFAULT_MAX_WS_CLIENTS 4
 #endif
