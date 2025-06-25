@@ -120,6 +120,9 @@ public:
   AsyncWebSocketMessageBuffer(const uint8_t *data, size_t size);
   //~AsyncWebSocketMessageBuffer();
   bool reserve(size_t size);
+  bool isValid() const {
+    return static_cast<bool>(_buffer); // just check pointer is not null
+  }
   uint8_t *get() {
     return _buffer->data();
   }
@@ -423,6 +426,7 @@ class AsyncWebSocketResponse : public AsyncWebServerResponse {
 private:
   String _content;
   AsyncWebSocket *_server;
+  bool _isValid;
 
 public:
   AsyncWebSocketResponse(const String &key, AsyncWebSocket *server);
@@ -430,6 +434,9 @@ public:
   size_t _ack(AsyncWebServerRequest *request, size_t len, uint32_t time);
   bool _sourceValid() const {
     return true;
+  }
+  bool isValid() const {
+    return _isValid;
   }
 };
 

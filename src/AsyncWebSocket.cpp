@@ -125,24 +125,37 @@ size_t webSocketSendFrame(AsyncClient *client, bool final, uint8_t opcode, bool 
  *    AsyncWebSocketMessageBuffer
  */
 
-AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(const uint8_t *data, size_t size) : _buffer(std::make_shared<std::vector<uint8_t>>(size)) {
-  if (_buffer) {
-    if (_buffer->capacity() < size) {
-      _buffer->clear(); // User shall check the size is 0 to return.
-    } else {
-      std::memcpy(_buffer->data(), data, size);
-    }
+AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(const uint8_t *data, size_t size) {
+  if (size > 0 && data == nullptr) {
+    _buffer.reset(); // signal failure
+    return;
+  }
+
+  auto raw_vec = new (std::nothrow) std::vector<uint8_t>(size);
+  if (!raw_vec) {
+    _buffer.reset(); // allocation failed
+    return;
+  }
+
+  _buffer.reset(raw_vec);
+  
+  if (size > 0) {
+    std::memcpy(_buffer->data(), data, size);
   }
 }
 
-AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(size_t size) : _buffer(std::make_shared<std::vector<uint8_t>>(size)) {
-  if (_buffer && _buffer->capacity() < size) {
-    _buffer->reserve(size);
+AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(size_t size) {
+  auto raw_vec = new (std::nothrow) std::vector<uint8_t>(size);
+  if (!raw_vec) {
+    _buffer.reset(); // allocation failed
+    return;
   }
+
+  _buffer.reset(raw_vec);
 }
 
 bool AsyncWebSocketMessageBuffer::reserve(size_t size) {
-  if (_buffer->capacity() >= size) {
+  if (_buffer && _buffer->capacity() >= size) {
     return true;
   }
   _buffer->reserve(size);
@@ -1365,11 +1378,10 @@ void AsyncWebSocket::handleRequest(AsyncWebServerRequest *request) {
   AsyncWebServerResponse *response = new (std::nothrow) AsyncWebSocketResponse(key->value(), this);
   ASYNC_WS_RESPONSE_DEBUG("New response = %u of %u", response, request);
 
-  if (response == NULL) {
-#ifdef ESP32
-    log_e("Failed to allocate");
-#endif
-    request->abort();
+  if (response == nullptr || !static_cast<AsyncWebSocketResponse *>(response)->isValid()) {
+    ASYNC_WS_RESPONSE_DEBUG("Response is not valid");
+    delete response; // Safe to call delete on nullptr
+    request->send(500);
     return;
   }
   if (request->hasHeader(WS_STR_PROTOCOL)) {
@@ -1382,23 +1394,29 @@ void AsyncWebSocket::handleRequest(AsyncWebServerRequest *request) {
 
 AsyncWebSocketMessageBuffer *AsyncWebSocket::makeBuffer(size_t size) {
   AsyncWebSocketMessageBuffer *buffer = new (std::nothrow) AsyncWebSocketMessageBuffer(size);
-  if (buffer) {
-    if (buffer->length() < size) {
-      delete buffer;
-      buffer = nullptr;
-    } 
+  if (!buffer) {
+    return nullptr;
   }
+
+  if (!buffer->isValid()) {
+    delete buffer;
+    return nullptr;
+  }
+
   return buffer;
 }
 
 AsyncWebSocketMessageBuffer *AsyncWebSocket::makeBuffer(const uint8_t *data, size_t size) {
   AsyncWebSocketMessageBuffer *buffer = new (std::nothrow) AsyncWebSocketMessageBuffer(data, size);
-  if (buffer) {
-    if (buffer->length() < size) {
-      delete buffer;
-      buffer = nullptr;
-    } 
+  if (!buffer) {
+    return nullptr;
   }
+
+  if (!buffer->isValid()) {
+    delete buffer;
+    return nullptr;
+  }
+
   return buffer;
 }
 
@@ -1407,7 +1425,7 @@ AsyncWebSocketMessageBuffer *AsyncWebSocket::makeBuffer(const uint8_t *data, siz
  * Authentication code from https://github.com/Links2004/arduinoWebSockets/blob/master/src/WebSockets.cpp#L480
  */
 
-AsyncWebSocketResponse::AsyncWebSocketResponse(const String &key, AsyncWebSocket *server) {
+AsyncWebSocketResponse::AsyncWebSocketResponse(const String &key, AsyncWebSocket *server) :_isValid(false) {
   _server = server;
   _code = 101;
   _sendContentLength = false;
@@ -1438,6 +1456,7 @@ AsyncWebSocketResponse::AsyncWebSocketResponse(const String &key, AsyncWebSocket
   addHeader(WS_STR_CONNECTION, WS_STR_UPGRADE);
   addHeader(WS_STR_UPGRADE, T_WS);
   addHeader(WS_STR_ACCEPT, buffer);
+  _isValid = true;
 }
 
 void AsyncWebSocketResponse::_respond(AsyncWebServerRequest *request) {
