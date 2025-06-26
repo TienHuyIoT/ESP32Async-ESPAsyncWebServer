@@ -126,6 +126,12 @@ size_t webSocketSendFrame(AsyncClient *client, bool final, uint8_t opcode, bool 
  */
 
 AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(const uint8_t *data, size_t size) {
+  size_t heapAllocateMax = ESP.getMaxAllocHeap();
+  if (heapAllocateMax < size) {
+    _buffer.reset(); // signal failure
+    return;
+  }
+  
   if (size > 0 && data == nullptr) {
     _buffer.reset(); // signal failure
     return;
@@ -145,6 +151,12 @@ AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(const uint8_t *data, si
 }
 
 AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(size_t size) {
+  size_t heapAllocateMax = ESP.getMaxAllocHeap();
+  if (heapAllocateMax < size) {
+    _buffer.reset(); // signal failure
+    return;
+  }
+
   auto raw_vec = new (std::nothrow) std::vector<uint8_t>(size);
   if (!raw_vec) {
     _buffer.reset(); // allocation failed
@@ -761,20 +773,21 @@ size_t AsyncWebSocketClient::printf_P(PGM_P formatP, ...) {
 
 namespace {
 AsyncWebSocketSharedBuffer makeSharedBuffer(const uint8_t *message, size_t len) {
-  auto buffer = std::make_shared<std::vector<uint8_t>>(len);
-  /**
-   * When memory allocation fails for a std::vector, it does not return a null pointer. 
-   * Instead, C++ throws an exception of type std::bad_alloc. 
-   * This happens when the system is unable to allocate memory for the vector.
-   * 
-   * By the way, for a safer mechanism, you should check if the pointer buffer is nullptr.
-  */
-  if (buffer) {
-    if (buffer->size() == len) {
-      std::memcpy(buffer->data(), message, len);
-    } else {
-      buffer->clear();  // _queueMessage will check the size is 0 to return.
-    }
+  size_t heapAllocateMax = ESP.getMaxAllocHeap();
+  if (heapAllocateMax < len) {
+    return nullptr;
+  }
+  
+  auto raw_vec = new (std::nothrow) std::vector<uint8_t>(len);
+  if (!raw_vec) {
+    return nullptr;
+  }
+
+  AsyncWebSocketSharedBuffer buffer;
+  buffer.reset(raw_vec);
+  
+  if (len > 0) {
+    std::memcpy(buffer->data(), message, len);
   }
   return buffer;
 }

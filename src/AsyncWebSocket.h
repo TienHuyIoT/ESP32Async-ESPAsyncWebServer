@@ -9,7 +9,7 @@
 #include <AsyncTCP.h>
 #include <mutex>
 #ifndef WS_MAX_QUEUED_MESSAGES
-#define WS_MAX_QUEUED_MESSAGES 64
+#define WS_MAX_QUEUED_MESSAGES 32
 #endif
 #elif defined(ESP8266)
 #include <ESPAsyncTCP.h>
