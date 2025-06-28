@@ -27,7 +27,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   : _client(c), _server(s), _handler(NULL), _response(NULL), _temp(), _parseState(PARSE_REQ_START), _version(0), _method(HTTP_ANY), _url(), _host(),
     _contentType(), _boundary(), _authorization(), _reqconntype(RCT_HTTP), _authMethod(AsyncAuthType::AUTH_NONE), _isMultipart(false), _isPlainPost(false),
     _expectingContinue(false), _contentLength(0), _parsedLength(0), _multiParseState(0), _boundaryPosition(0), _itemStartIndex(0), _itemSize(0), _itemName(),
-    _itemFilename(), _itemType(), _itemValue(), _itemBuffer(0), _itemBufferIndex(0), _itemIsFile(false), _tempObject(NULL), _tempSize(0) {
+    _itemFilename(), _itemType(), _itemValue(), _itemBuffer(0), _itemBufferIndex(0), _itemIsFile(false), _tempObject(NULL), _tempSize(0), _rx_timeout(SERVER_RX_TIMEOUT) {
   c->onError(
     [](void *r, AsyncClient *c, int8_t error) {
       (void)c;
@@ -756,7 +756,6 @@ void AsyncWebServerRequest::_send() {
     }
 
     // here, we either have a response give nfrom user or one of the two above
-    _client->setRxTimeout(0);
     _response->_respond(this);
     _sent = true;
   }
@@ -766,6 +765,7 @@ AsyncWebServerRequestPtr AsyncWebServerRequest::pause() {
   if (_paused) {
     return _this;
   }
+  _rx_timeout = client()->getRxTimeout(); // backup client rx timeout
   client()->setRxTimeout(0);
   // this shared ptr will hold the request pointer until it gets destroyed following a disconnect.
   // this is just used as a holder providing weak observers, so the deleter is a no-op.
@@ -1005,6 +1005,7 @@ void AsyncWebServerRequest::send(AsyncWebServerResponse *response) {
   // if request was paused, we need to send the response now
   if (_paused) {
     _paused = false;
+    _client->setRxTimeout(_rx_timeout); // restore rx timeout
     _send();
   }
 }

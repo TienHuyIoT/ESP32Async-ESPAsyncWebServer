@@ -95,6 +95,8 @@ public:
 // if this value is returned when asked for data, packet will not be sent and you will be asked for data again
 #define RESPONSE_TRY_AGAIN          0xFFFFFFFF
 #define RESPONSE_STREAM_BUFFER_SIZE 1460
+#define SERVER_RX_TIMEOUT 2 // Seconds for timeout
+
 
 typedef uint8_t WebRequestMethodComposite;
 typedef std::function<void(void)> ArDisconnectHandler;
@@ -241,6 +243,7 @@ private:
   String _itemValue;
   uint8_t *_itemBuffer;
   size_t _itemBufferIndex;
+  uint32_t _rx_timeout;
   bool _itemIsFile;
 
   void _onPoll();
