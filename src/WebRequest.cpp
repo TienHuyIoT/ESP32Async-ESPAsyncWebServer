@@ -7,8 +7,6 @@
 #include "literals.h"
 #include <cstring>
 
-#define ASYNC_REQUEST_CONSOLE_DEBUG(f_, ...)  //Serial.printf_P(PSTR("[WebRequest] %s line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
-
 #define __is_param_char(c) ((c) && ((c) != '{') && ((c) != '[') && ((c) != '&') && ((c) != '='))
 
 static void doNotDelete(AsyncWebServerRequest *) {}
@@ -84,17 +82,17 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
     },
     this
   );
-  ASYNC_REQUEST_CONSOLE_DEBUG("New request = %u", this);
+  ASYNC_SERVER_CONSOLE_I("New request = %u", this);
 }
 
 AsyncWebServerRequest::~AsyncWebServerRequest() {
   // log_e("AsyncWebServerRequest::~AsyncWebServerRequest");
-  ASYNC_REQUEST_CONSOLE_DEBUG("Delete request = %u", this);
+  ASYNC_SERVER_CONSOLE_I("Del request = %u", this);
 
 #ifdef ESP32
-    std::lock_guard<std::recursive_mutex> lock1(_headerLock);
-    std::lock_guard<std::recursive_mutex> lock2(_paramsLock);
-    std::lock_guard<std::recursive_mutex> lock3(_pathParamsLock);
+    // std::lock_guard<std::recursive_mutex> lock1(_headerLock);
+    // std::lock_guard<std::recursive_mutex> lock2(_paramsLock);
+    // std::lock_guard<std::recursive_mutex> lock3(_pathParamsLock);
 #endif
 
   _this.reset();
@@ -109,7 +107,7 @@ AsyncWebServerRequest::~AsyncWebServerRequest() {
   if (_response) {
     AsyncWebServerResponse *r = _response;
     _response = NULL;
-    ASYNC_REQUEST_CONSOLE_DEBUG("Delete response = %u of %u", r, this);
+    ASYNC_SERVER_CONSOLE_I("r %u del response = %u", this, r);
     delete r;
   }
 
@@ -239,6 +237,7 @@ void AsyncWebServerRequest::_onPoll() {
   // os_printf("p\n");
   if (_response && _client && _client->canSend()) {
     if (!_response->_finished()) {
+      // ASYNC_SERVER_CONSOLE_I("_p 0");
       _response->_ack(this, 0, 0);
     } else {
       AsyncWebServerResponse *r = _response;
@@ -253,6 +252,7 @@ void AsyncWebServerRequest::_onAck(size_t len, uint32_t time) {
   // os_printf("a:%u:%u\n", len, time);
   if (_response) {
     if (!_response->_finished()) {
+      // ASYNC_SERVER_CONSOLE_I("_a %u", len);
       _response->_ack(this, len, time);
     } else if (_response->_finished()) {
       AsyncWebServerResponse *r = _response;
@@ -775,11 +775,8 @@ AsyncWebServerRequestPtr AsyncWebServerRequest::pause() {
 }
 
 void AsyncWebServerRequest::abort() {
-  if (!_sent) {
-    _sent = true;
-    _paused = false;
-    _this.reset();
-    // log_e("AsyncWebServerRequest::abort");
+  // log_e("AsyncWebServerRequest::abort");
+  if (_client) {
     _client->abort();
   }
 }
@@ -957,7 +954,7 @@ AsyncWebServerResponse *
 
 AsyncWebServerResponse *
   AsyncWebServerRequest::beginResponse(File content, const String &path, const char *contentType, bool download, AwsTemplateProcessor callback) {
-  if (content == true) {
+  if (content) {
     return new AsyncFileResponse(content, path, contentType, download, callback);
   }
   return NULL;
@@ -996,11 +993,11 @@ void AsyncWebServerRequest::send(AsyncWebServerResponse *response) {
 
   // if we already had a response, delete it and replace it with the new one
   if (_response) {
-    ASYNC_REQUEST_CONSOLE_DEBUG("Delete response = %u of %u", _response, this);
+    ASYNC_SERVER_CONSOLE_I("r %u del response = %u", this, _response);
     delete _response;
   }
   _response = response;
-  ASYNC_REQUEST_CONSOLE_DEBUG("Register response = %u of %u", _response, this);
+  ASYNC_SERVER_CONSOLE_I("r %u Register response = %u", this, _response);
 
   // if request was paused, we need to send the response now
   if (_paused) {

@@ -370,7 +370,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
   // for chunked responses ignore acks if there are no _in_flight_credits left
   if (_chunked && !_in_flight_credit) {
 #ifdef ESP32
-    log_d("(chunk) out of in-flight credits");
+    ASYNC_SERVER_CONSOLE_I("c %u (chunk) out of in-flight credits", request->client());
 #endif
     return 0;
   }
@@ -381,10 +381,14 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
 
   _ackedLength += len;
   size_t space = request->client()->space();
+  if (space == 0) {
+    return 0;
+  }
 
   size_t headLen = _head.length();
   if (_state == RESPONSE_HEADERS) {
     if (space >= headLen) {
+      ASYNC_SERVER_CONSOLE_I("c %u _state = RESPONSE_CONTENT", request->client());
       _state = RESPONSE_CONTENT;
       space -= headLen;
     } else {
@@ -411,7 +415,8 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
       if (len) {
         --_in_flight_credit;
       }
-      return 0;
+      ASYNC_SERVER_CONSOLE_I("c %u f %u s %u", request->client(), _in_flight, space);
+      // return 0; // Error in case of poll, Always return 0
     }
 #endif
 
@@ -431,7 +436,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
     uint8_t *buf = (uint8_t *)malloc(outLen + headLen);
     if (!buf) {
 #ifdef ESP32
-      log_e("Failed to allocate");
+      ASYNC_SERVER_CONSOLE_E("c %u Failed ol %u hl %u s %u", request->client(), outLen, headLen, space);
 #endif
       request->abort();
       return 0;
@@ -449,6 +454,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
       readLen = _fillBufferAndProcessTemplates(buf + headLen + 6, outLen - 8);
       if (readLen == RESPONSE_TRY_AGAIN) {
         free(buf);
+        ASYNC_SERVER_CONSOLE_E("c %u Chunked: readLen == RESPONSE_TRY_AGAIN", request->client());
         return 0;
       }
       outLen = sprintf((char *)buf + headLen, "%04x", readLen) + headLen;
@@ -461,6 +467,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
       readLen = _fillBufferAndProcessTemplates(buf + headLen, outLen);
       if (readLen == RESPONSE_TRY_AGAIN) {
         free(buf);
+        ASYNC_SERVER_CONSOLE_E("c %u readLen == RESPONSE_TRY_AGAIN", request->client());
         return 0;
       }
       outLen = readLen + headLen;
@@ -471,7 +478,15 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
     }
 
     if (outLen) {
-      _writtenLength += request->client()->write((const char *)buf, outLen);
+      size_t sendLength = request->client()->write((const char *)buf, outLen);
+      if (sendLength != outLen) {
+        ASYNC_SERVER_CONSOLE_E("c %u failed write s %u # o %u", request->client(), sendLength, outLen);
+        free(buf);
+        request->abort();
+        return 0;
+      }
+
+      _writtenLength += outLen;
 #if ASYNCWEBSERVER_USE_CHUNK_INFLIGHT
       _in_flight += outLen;
       --_in_flight_credit;  // take a credit
@@ -487,14 +502,17 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
     free(buf);
 
     if ((_chunked && readLen == 0) || (!_sendContentLength && outLen == 0) || (!_chunked && _sentLength == _contentLength)) {
+      ASYNC_SERVER_CONSOLE_I("c %u _state = RESPONSE_WAIT_ACK", request->client());
       _state = RESPONSE_WAIT_ACK;
     }
     return outLen;
 
   } else if (_state == RESPONSE_WAIT_ACK) {
     if (!_sendContentLength || _ackedLength >= _writtenLength) {
+      ASYNC_SERVER_CONSOLE_I("c %u _state = RESPONSE_END", request->client());
       _state = RESPONSE_END;
       if (!_chunked && !_sendContentLength) {
+        ASYNC_SERVER_CONSOLE_I("c %u Finished", request->client());
         request->client()->close(true);
       }
     }

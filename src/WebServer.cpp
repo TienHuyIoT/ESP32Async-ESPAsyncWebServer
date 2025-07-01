@@ -4,9 +4,8 @@
 #include "ESPAsyncWebServer.h"
 #include "WebHandlerImpl.h"
 
-#define ASYNC_SERVER_CONSOLE_DEBUG(f_, ...)  //Serial.printf_P(PSTR("[WebServer] %s line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
-
 using namespace asyncsrv;
+AsyncConsole AsyncWebServerConsole;
 
 bool ON_STA_FILTER(AsyncWebServerRequest *request) {
 #ifndef CONFIG_IDF_TARGET_ESP32H2
@@ -39,10 +38,12 @@ AsyncWebServer::AsyncWebServer(uint16_t port) : _server(port) {
       }
       c->setRxTimeout(SERVER_RX_TIMEOUT);
       AsyncWebServerRequest *r = new (std::nothrow) AsyncWebServerRequest((AsyncWebServer *)s, c);
-      ASYNC_SERVER_CONSOLE_DEBUG("server %u, New client %u, request %u", c, s, r);
+      ASYNC_SERVER_CONSOLE_I("s %u, c %u, r %u", s, c, r);
       if (r == NULL) {
         c->abort();
-        // delete c;
+#if !defined(ASYNC_TCP_DELETION_HANDLE) || (ASYNC_TCP_DELETION_HANDLE == 0)
+        delete c;
+#endif
       }
     },
     this
@@ -138,7 +139,7 @@ void AsyncWebServer::beginSecure(const char *cert, const char *key, const char *
 #endif
 
 void AsyncWebServer::_handleDisconnect(AsyncWebServerRequest *request) {
-  ASYNC_SERVER_CONSOLE_DEBUG("Delete request %u", request);
+  ASYNC_SERVER_CONSOLE_I("Del r %u", request);
   delete request;
 }
 
