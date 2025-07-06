@@ -480,7 +480,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
     if (outLen) {
       size_t sendLength = request->client()->write((const char *)buf, outLen);
       if (sendLength != outLen) {
-        ASYNC_SERVER_CONSOLE_E("c %u failed write s %u # o %u", request->client(), sendLength, outLen);
+        ASYNC_SERVER_CONSOLE_E("c %u failed write s %u # o %u, l %u, sp %u", request->client(), sendLength, outLen, _writtenLength, space);
         free(buf);
         request->abort();
         return 0;
