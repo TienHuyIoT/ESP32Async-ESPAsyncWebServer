@@ -126,18 +126,20 @@ size_t webSocketSendFrame(AsyncClient *client, bool final, uint8_t opcode, bool 
  */
 
 AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(const uint8_t *data, size_t size) {
-  size_t heapAllocateMax = ESP.getMaxAllocHeap();
-  if (heapAllocateMax < size) {
-    _buffer.reset(); // signal failure
-    return;
-  }
-  
   if (size > 0 && data == nullptr) {
     _buffer.reset(); // signal failure
     return;
   }
 
-  auto raw_vec = new (std::nothrow) std::vector<uint8_t>(size);
+  // auto raw_vec = new (std::nothrow) std::vector<uint8_t>(size);
+  std::vector<uint8_t>* raw_vec = nullptr;
+  try {
+    raw_vec = new std::vector<uint8_t>(size);
+  } catch (const std::bad_alloc&) {
+    _buffer.reset(); // allocation failed
+    return;
+  }
+
   if (!raw_vec) {
     _buffer.reset(); // allocation failed
     return;
@@ -151,13 +153,15 @@ AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(const uint8_t *data, si
 }
 
 AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(size_t size) {
-  size_t heapAllocateMax = ESP.getMaxAllocHeap();
-  if (heapAllocateMax < size) {
-    _buffer.reset(); // signal failure
+  // auto raw_vec = new (std::nothrow) std::vector<uint8_t>(size);
+  std::vector<uint8_t>* raw_vec = nullptr;
+  try {
+    raw_vec = new std::vector<uint8_t>(size);
+  } catch (const std::bad_alloc&) {
+    _buffer.reset(); // allocation failed
     return;
   }
 
-  auto raw_vec = new (std::nothrow) std::vector<uint8_t>(size);
   if (!raw_vec) {
     _buffer.reset(); // allocation failed
     return;
@@ -773,12 +777,14 @@ size_t AsyncWebSocketClient::printf_P(PGM_P formatP, ...) {
 
 namespace {
 AsyncWebSocketSharedBuffer makeSharedBuffer(const uint8_t *message, size_t len) {
-  size_t heapAllocateMax = ESP.getMaxAllocHeap();
-  if (heapAllocateMax < len) {
-    return nullptr;
+  // auto raw_vec = new (std::nothrow) std::vector<uint8_t>(len);
+  std::vector<uint8_t>* raw_vec = nullptr;
+  try {
+    raw_vec = new std::vector<uint8_t>(len);
+  } catch (const std::bad_alloc&) {
+    return nullptr; // allocation failed
   }
-  
-  auto raw_vec = new (std::nothrow) std::vector<uint8_t>(len);
+
   if (!raw_vec) {
     return nullptr;
   }
