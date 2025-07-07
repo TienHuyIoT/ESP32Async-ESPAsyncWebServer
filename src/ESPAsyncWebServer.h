@@ -52,7 +52,7 @@
 
 extern AsyncConsole AsyncWebServerConsole;
 #define ASYNC_SERVER_CONSOLE_I(f_, ...)  //AsyncWebServerConsole.printf_P(PSTR("I [AsyncWeb] %s(), line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
-#define ASYNC_SERVER_CONSOLE_E(f_, ...)  AsyncWebServerConsole.printf_P(PSTR("E [AsyncWeb] %s(), line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
+#define ASYNC_SERVER_CONSOLE_E(f_, ...)  //AsyncWebServerConsole.printf_P(PSTR("E [AsyncWeb] %s(), line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
 
 class AsyncWebServer;
 class AsyncWebServerRequest;
