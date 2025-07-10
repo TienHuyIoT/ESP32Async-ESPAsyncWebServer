@@ -51,11 +51,7 @@ class AsyncEventSourceClient;
 using ArEventHandlerFunction = std::function<void(AsyncEventSourceClient *client)>;
 using ArAuthorizeConnectHandler = ArAuthorizeFunction;
 // shared message object container
-#if ESP_IDF_VERSION_MAJOR >= 4
 using AsyncEvent_SharedData_t = std::shared_ptr<String>;
-#else
-using AsyncEvent_SharedData_t = std::shared_ptr<std::string>;
-#endif
 
 typedef enum : bool {
   SSE_CLIENT_QUEUE_UNLOCK,
@@ -76,11 +72,7 @@ private:
 public:
   AsyncEventSourceMessage(AsyncEvent_SharedData_t data) : _data(data){};
 #if defined(ESP32)
-#if ESP_IDF_VERSION_MAJOR >= 4
   AsyncEventSourceMessage(const char *data, size_t len) : _data(std::make_shared<String>(data, len)) {};
-#else
-  AsyncEventSourceMessage(const char *data, size_t len) : _data(std::make_shared<std::string>(data, len)) {};
-#endif
 #elif defined(TARGET_RP2040) || defined(TARGET_RP2350) || defined(PICO_RP2040) || defined(PICO_RP2350)
   AsyncEventSourceMessage(const char *data, size_t len) : _data(std::make_shared<String>()) {
     if (data && len > 0) {

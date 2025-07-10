@@ -13,17 +13,9 @@
 
 using namespace asyncsrv;
 
-#if ESP_IDF_VERSION_MAJOR >= 4
 static String generateEventMessage(const char *message, const char *event, uint32_t id, uint32_t reconnect)
-#else
-static std::string generateEventMessage(const char *message, const char *event, uint32_t id, uint32_t reconnect)
-#endif
 {
-#if ESP_IDF_VERSION_MAJOR >= 4
   String str;
-#else
-  std::string str;
-#endif
   size_t len{0};
   if (message) {
     len += strlen(message);
@@ -35,22 +27,12 @@ static std::string generateEventMessage(const char *message, const char *event, 
 
   len += 42;  // give it some overhead
 
-#if ESP_IDF_VERSION_MAJOR >= 4
   if (!str.reserve(len)) {
 #ifdef ESP32
     log_e("Failed to allocate");
 #endif
     return emptyString;
   }
-#else
-  str.reserve(len);
-  if (str.capacity() < len) {
-#ifdef ESP32
-    log_e("Failed to allocate");
-#endif
-    return ""; //emptyString
-  }
-#endif
   if (reconnect) {
     str += T_retry_;
     str += reconnect;
@@ -108,11 +90,7 @@ static std::string generateEventMessage(const char *message, const char *event, 
     }
 
     str += T_data_;
-#if ESP_IDF_VERSION_MAJOR >= 4
     str.concat(lineStart, lineEnd - lineStart);
-#else
-    str.append(lineStart, lineEnd - lineStart);
-#endif
     str += ASYNC_SSE_NEW_LINE_CHAR;  // \n
 
     lineStart = nextLine;
@@ -346,11 +324,7 @@ bool AsyncEventSourceClient::send(const char *message, const char *event, uint32
   if (!connected()) {
     return false;
   }
-#if ESP_IDF_VERSION_MAJOR >= 4
   return _queueMessage(std::make_shared<String>(generateEventMessage(message, event, id, reconnect)));
-#else
-  return _queueMessage(std::make_shared<std::string>(generateEventMessage(message, event, id, reconnect)));
-#endif
 }
 
 void AsyncEventSourceClient::_runQueue() {
@@ -469,11 +443,7 @@ size_t AsyncEventSource::avgPacketsWaiting() const {
 }
 
 AsyncEventSource::SendStatus AsyncEventSource::send(const char *message, const char *event, uint32_t id, uint32_t reconnect) {
-#if ESP_IDF_VERSION_MAJOR >= 4
   AsyncEvent_SharedData_t shared_msg = std::make_shared<String>(generateEventMessage(message, event, id, reconnect));
-#else
-  AsyncEvent_SharedData_t shared_msg = std::make_shared<std::string>(generateEventMessage(message, event, id, reconnect));
-#endif
 #ifdef ESP32
   std::lock_guard<std::recursive_mutex> lock(_client_queue_lock);
 #endif
