@@ -22,7 +22,7 @@ enum {
 };
 
 AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
-  : _client(c), _server(s), _handler(NULL), _response(NULL), _temp(), _parseState(PARSE_REQ_START), _version(0), _method(HTTP_ANY), _url(), _host(),
+  : _client(c), _server(s), _handler(NULL), _response(NULL), _onDisconnectfn(NULL), _temp(), _parseState(PARSE_REQ_START), _version(0), _method(HTTP_ANY), _url(), _host(),
     _contentType(), _boundary(), _authorization(), _reqconntype(RCT_HTTP), _authMethod(AsyncAuthType::AUTH_NONE), _isMultipart(false), _isPlainPost(false),
     _expectingContinue(false), _contentLength(0), _parsedLength(0), _multiParseState(0), _boundaryPosition(0), _itemStartIndex(0), _itemSize(0), _itemName(),
     _itemFilename(), _itemType(), _itemValue(), _itemBuffer(0), _itemBufferIndex(0), _itemIsFile(false), _tempObject(NULL), _tempSize(0), _rx_timeout(SERVER_RX_TIMEOUT) {
@@ -368,10 +368,10 @@ bool AsyncWebServerRequest::_parseReqHead() {
 }
 
 bool AsyncWebServerRequest::_parseReqHeader() {
-  int index = _temp.indexOf(':');
-  if (index) {
-    String name(_temp.substring(0, index));
-    String value(_temp.substring(index + 2));
+  AsyncWebHeader header = AsyncWebHeader::parse(_temp);
+  if (header) {
+    const String &name = header.name();
+    const String &value = header.value();
     if (name.equalsIgnoreCase(T_Host)) {
       _host = value;
     } else if (name.equalsIgnoreCase(T_Content_Type)) {
@@ -422,9 +422,9 @@ bool AsyncWebServerRequest::_parseReqHeader() {
 #ifdef ESP32
     std::lock_guard<std::recursive_mutex> lock(_headerLock);
 #endif
-    _headers.emplace_back(name, value);
+    _headers.emplace_back(std::move(header));
   }
-#if defined(TARGET_RP2040) || defined(TARGET_RP2350) || defined(PICO_RP2040) || defined(PICO_RP2350)
+#if defined(TARGET_RP2040) || defined(TARGET_RP2350) || defined(PICO_RP2040) || defined(PICO_RP2350) || defined(LIBRETINY)
   // Ancient PRI core does not have String::clear() method 8-()
   _temp = emptyString;
 #else
@@ -452,7 +452,7 @@ void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data) {
       _params.emplace_back(name, urlDecode(value), true);
     }
 
-#if defined(TARGET_RP2040) || defined(TARGET_RP2350) || defined(PICO_RP2040) || defined(PICO_RP2350)
+#if defined(TARGET_RP2040) || defined(TARGET_RP2350) || defined(PICO_RP2040) || defined(PICO_RP2350) || defined(LIBRETINY)
     // Ancient PRI core does not have String::clear() method 8-()
     _temp = emptyString;
 #else

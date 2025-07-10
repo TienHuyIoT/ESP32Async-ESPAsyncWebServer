@@ -3,23 +3,35 @@
 
 #include <ESPAsyncWebServer.h>
 
-AsyncWebHeader::AsyncWebHeader(const String &data) {
+const AsyncWebHeader AsyncWebHeader::parse(const char *data) {
+  // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers
+  // In HTTP/1.X, a header is a case-insensitive name followed by a colon, then optional whitespace which will be ignored, and finally by its value
   if (!data) {
-    return;
+    return AsyncWebHeader();  // nullptr
   }
-  int index = data.indexOf(':');
-  if (index < 0) {
-    return;
+  if (data[0] == '\0') {
+    return AsyncWebHeader();  // empty string
   }
-  if (data.indexOf('\r') >= 0 || data.indexOf('\n') >= 0) {
-// Note: do not log as info, warn or error because this could flood the logs without being able to filter this out
-#ifdef ESP32
-    log_v("Invalid character in HTTP header");
-#endif
-    return;  // Invalid header format
+  if (strchr(data, '\n') || strchr(data, '\r')) {
+    return AsyncWebHeader();  // Invalid header format
   }
-  _name = data.substring(0, index);
-  _value = data.substring(index + 2);
+  char *colon = strchr(data, ':');
+  if (!colon) {
+    return AsyncWebHeader();  // separator not found
+  }
+  if (colon == data) {
+    return AsyncWebHeader();  // Header name cannot be empty
+  }
+  char *startOfValue = colon + 1;  // Skip the colon
+  // skip one optional whitespace after the colon
+  if (*startOfValue == ' ') {
+    startOfValue++;
+  }
+
+  String name;
+  name.reserve(colon - data);
+  name.concat(data, colon - data);
+  return AsyncWebHeader(name, String(startOfValue));
 }
 
 String AsyncWebHeader::toString() const {

@@ -17,6 +17,8 @@
 #include <rom/ets_sys.h>
 #elif defined(TARGET_RP2040) || defined(TARGET_RP2350) || defined(PICO_RP2040) || defined(PICO_RP2350) || defined(ESP8266)
 #include <Hash.h>
+#elif defined(LIBRETINY)
+#include <mbedtls/sha1.h>
 #endif
 
 using namespace asyncsrv;
@@ -171,9 +173,14 @@ AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(size_t size) {
 }
 
 bool AsyncWebSocketMessageBuffer::reserve(size_t size) {
-  if (_buffer && _buffer->capacity() >= size) {
+  if (!isValid()) {
+    return false;
+  }
+
+  if (_buffer->capacity() >= size) {
     return true;
   }
+  
   _buffer->reserve(size);
   return _buffer->capacity() >= size;
 }
@@ -1462,11 +1469,20 @@ AsyncWebSocketResponse::AsyncWebSocketResponse(const String &key, AsyncWebSocket
   }
   k.concat(key);
   k.concat(WS_STR_UUID);
+#ifdef LIBRETINY
+  mbedtls_sha1_context ctx;
+  mbedtls_sha1_init(&ctx);
+  mbedtls_sha1_starts(&ctx);
+  mbedtls_sha1_update(&ctx, (const uint8_t *)k.c_str(), k.length());
+  mbedtls_sha1_finish(&ctx, hash);
+  mbedtls_sha1_free(&ctx);
+#else
   SHA1Builder sha1;
   sha1.begin();
   sha1.add((const uint8_t *)k.c_str(), k.length());
   sha1.calculate();
   sha1.getBytes(hash);
+#endif
 #endif
   base64_encodestate _state;
   base64_init_encodestate(&_state);

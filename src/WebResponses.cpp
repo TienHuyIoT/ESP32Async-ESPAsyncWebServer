@@ -150,6 +150,30 @@ bool AsyncWebServerResponse::headerMustBePresentOnce(const String &name) {
   return false;
 }
 
+bool AsyncWebServerResponse::addHeader(AsyncWebHeader &&header, bool replaceExisting) {
+  if (!header) {
+    return false;  // invalid header
+  }
+  for (auto i = _headers.begin(); i != _headers.end(); ++i) {
+    if (i->name().equalsIgnoreCase(header.name())) {
+      // header already set
+      if (replaceExisting) {
+        // remove, break and add the new one
+        _headers.erase(i);
+        break;
+      } else if (headerMustBePresentOnce(i->name())) {  // we can have only one header with that name
+        // do not update
+        return false;
+      } else {
+        break;  // accept multiple headers with the same name
+      }
+    }
+  }
+  // header was not found found, or existing one was removed
+  _headers.emplace_back(std::move(header));
+  return true;
+}
+
 bool AsyncWebServerResponse::addHeader(const char *name, const char *value, bool replaceExisting) {
 #ifdef ESP32
   std::lock_guard<std::recursive_mutex> lock(_headerLock);
@@ -689,20 +713,38 @@ void AsyncFileResponse::_setContentTypeFromPath(const String &path) {
 AsyncFileResponse::AsyncFileResponse(FS &fs, const String &path, const char *contentType, bool download, AwsTemplateProcessor callback)
   : AsyncAbstractResponse(callback) {
   _code = 200;
-  _path = path;
+  const String gzPath = path + asyncsrv::T__gz;
 
-  if (!download && !fs.exists(_path) && fs.exists(_path + T__gz)) {
-    _path = _path + T__gz;
+  if (!download && !fs.exists(path) && fs.exists(gzPath)) {
+    _path = gzPath;
+    _content = fs.open(gzPath, fs::FileOpenMode::read);
+    _contentLength = _content.size();
     addHeader(T_Content_Encoding, T_gzip, false);
     _callback = nullptr;  // Unable to process zipped templates
     _sendContentLength = true;
     _chunked = false;
+
+    // CRC32-based ETag of the trailer, bytes 4-7 from the end
+    _content.seek(_contentLength - 8);
+    uint8_t crcInTrailer[4];
+    if (_content.read(crcInTrailer, sizeof(crcInTrailer)) == sizeof(crcInTrailer)) {
+      char serverETag[9];
+      AsyncWebServerRequest::_getEtag(crcInTrailer, serverETag);
+      addHeader(T_ETag, serverETag, false);
+      addHeader(T_Cache_Control, T_no_cache, false);
+    }
+
+    // Return to the beginning of the file
+    _content.seek(0);
   }
 
-  _content = fs.open(_path, fs::FileOpenMode::read);
-  _contentLength = _content.size();
+  if (!_content) {
+    _path = path;
+    _content = fs.open(path, fs::FileOpenMode::read);
+    _contentLength = _content.size();
+  }
 
-  if (strlen(contentType) == 0) {
+  if (*contentType != '\0') {
     _setContentTypeFromPath(path);
   } else {
     _contentType = contentType;
