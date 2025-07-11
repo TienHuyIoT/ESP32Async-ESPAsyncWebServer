@@ -13,8 +13,7 @@
 
 using namespace asyncsrv;
 
-static String generateEventMessage(const char *message, const char *event, uint32_t id, uint32_t reconnect)
-{
+static String generateEventMessage(const char *message, const char *event, uint32_t id, uint32_t reconnect) {
   String str;
   size_t len{0};
   if (message) {
@@ -33,6 +32,7 @@ static String generateEventMessage(const char *message, const char *event, uint3
 #endif
     return emptyString;
   }
+
   if (reconnect) {
     str += T_retry_;
     str += reconnect;

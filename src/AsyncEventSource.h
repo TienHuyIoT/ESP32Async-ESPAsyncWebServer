@@ -5,7 +5,6 @@
 #define ASYNCEVENTSOURCE_H_
 
 #include <Arduino.h>
-#include <string>
 
 #if defined(ESP32) || defined(LIBRETINY)
 #include <AsyncTCP.h>
@@ -72,7 +71,7 @@ private:
 public:
   AsyncEventSourceMessage(AsyncEvent_SharedData_t data) : _data(data){};
 #if defined(ESP32)
-  AsyncEventSourceMessage(const char *data, size_t len) : _data(std::make_shared<String>(data, len)) {};
+  AsyncEventSourceMessage(const char *data, size_t len) : _data(std::make_shared<String>(data, len)){};
 #elif defined(TARGET_RP2040) || defined(TARGET_RP2350) || defined(PICO_RP2040) || defined(PICO_RP2350)
   AsyncEventSourceMessage(const char *data, size_t len) : _data(std::make_shared<String>()) {
     if (data && len > 0) {

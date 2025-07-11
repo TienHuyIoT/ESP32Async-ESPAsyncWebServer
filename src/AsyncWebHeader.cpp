@@ -27,7 +27,6 @@ const AsyncWebHeader AsyncWebHeader::parse(const char *data) {
   if (*startOfValue == ' ') {
     startOfValue++;
   }
-
   String name;
   name.reserve(colon - data);
   name.concat(data, colon - data);
