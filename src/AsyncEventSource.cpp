@@ -7,8 +7,6 @@
 #endif
 #include "AsyncEventSource.h"
 
-#define ASYNC_SSE_CONSOLE_DEBUG(f_, ...)  //Serial.printf_P(PSTR("\n\n[Async SSE] %s line %u: " f_ "\n"),  __func__, __LINE__, ##__VA_ARGS__)
-
 #define ASYNC_SSE_NEW_LINE_CHAR (char)0xa
 
 using namespace asyncsrv;
