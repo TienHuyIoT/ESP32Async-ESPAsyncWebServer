@@ -47,6 +47,10 @@
 #define ASYNCWEBSERVER_USE_CHUNK_INFLIGHT 1
 #endif
 
+#ifndef ASYNCWEBSERVER_RX_TIMEOUT
+#define ASYNCWEBSERVER_RX_TIMEOUT 3  // Seconds for timeout
+#endif
+
 extern AsyncConsole AsyncWebServerConsole;
 #define ASYNC_SERVER_CONSOLE_I(f_, ...)  //AsyncWebServerConsole.printf_P(PSTR("I [AsyncWeb] %s(), line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
 #define ASYNC_SERVER_CONSOLE_E(f_, ...)  //AsyncWebServerConsole.printf_P(PSTR("E [AsyncWeb] %s(), line %u: " f_ "\r\n"),  __func__, __LINE__, ##__VA_ARGS__)
@@ -96,8 +100,6 @@ public:
 // if this value is returned when asked for data, packet will not be sent and you will be asked for data again
 #define RESPONSE_TRY_AGAIN          0xFFFFFFFF
 #define RESPONSE_STREAM_BUFFER_SIZE CONFIG_TCP_MSS
-#define SERVER_RX_TIMEOUT 2 // Seconds for timeout
-
 
 typedef uint8_t WebRequestMethodComposite;
 typedef std::function<void(void)> ArDisconnectHandler;
@@ -295,7 +297,6 @@ private:
 public:
   File _tempFile;
   void *_tempObject;
-  size_t _tempSize;
 
   AsyncWebServerRequest(AsyncWebServer *, AsyncClient *);
   ~AsyncWebServerRequest();
