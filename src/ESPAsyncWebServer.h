@@ -92,7 +92,7 @@ public:
 #endif
 
 // if this value is returned when asked for data, packet will not be sent and you will be asked for data again
-#define RESPONSE_TRY_AGAIN          0xFFFFFFFF
+#define RESPONSE_TRY_AGAIN 0xFFFFFFFF
 
 #ifndef CONFIG_TCP_MSS
 #define RESPONSE_STREAM_BUFFER_SIZE 1460
