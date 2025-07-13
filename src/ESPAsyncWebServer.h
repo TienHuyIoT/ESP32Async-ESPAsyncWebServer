@@ -16,6 +16,7 @@
 #include <vector>
 
 #if defined(ESP32) || defined(LIBRETINY)
+#include "sdkconfig.h"
 #include <AsyncTCP.h>
 #elif defined(ESP8266)
 #include <ESPAsyncTCP.h>
@@ -92,7 +93,12 @@ public:
 
 // if this value is returned when asked for data, packet will not be sent and you will be asked for data again
 #define RESPONSE_TRY_AGAIN          0xFFFFFFFF
+
+#ifndef CONFIG_TCP_MSS
+#define RESPONSE_STREAM_BUFFER_SIZE 1460
+#else
 #define RESPONSE_STREAM_BUFFER_SIZE CONFIG_TCP_MSS
+#endif
 
 typedef uint8_t WebRequestMethodComposite;
 typedef std::function<void(void)> ArDisconnectHandler;
