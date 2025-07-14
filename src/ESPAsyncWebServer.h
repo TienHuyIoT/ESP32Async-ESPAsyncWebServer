@@ -18,7 +18,9 @@
 #include <vector>
 
 #if defined(ESP32) || defined(LIBRETINY)
+#ifdef ESP32
 #include "sdkconfig.h"
+#endif
 #include <AsyncTCP.h>
 #include <mutex>
 #elif defined(ESP8266)
