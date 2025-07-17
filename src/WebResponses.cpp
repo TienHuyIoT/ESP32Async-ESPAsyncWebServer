@@ -720,6 +720,8 @@ void AsyncFileResponse::_setContentTypeFromPath(const String &path) {
     _contentType = T_application_zip;
   } else if (strcmp(dot, T__gz) == 0) {
     _contentType = T_application_x_gzip;
+  } else if (strcmp(dot, T__mp4) == 0) {
+    _contentType = T_video_mp4;
   } else {
     _contentType = T_text_plain;
   }
@@ -774,7 +776,7 @@ AsyncFileResponse::AsyncFileResponse(FS &fs, const String &path, const char *con
     }
   }
 
-  if (*contentType != '\0') {
+  if (*contentType == '\0') {
     _setContentTypeFromPath(path);
   } else {
     _contentType = contentType;
@@ -785,11 +787,11 @@ AsyncFileResponse::AsyncFileResponse(FS &fs, const String &path, const char *con
     int filenameStart = path.lastIndexOf('/') + 1;
     char buf[26 + path.length() - filenameStart];
     char *filename = (char *)path.c_str() + filenameStart;
-    snprintf_P(buf, sizeof(buf), PSTR("attachment; filename=\"%s\""), filename);
+    snprintf(buf, sizeof(buf), T_attachment, filename);
     addHeader(T_Content_Disposition, buf, false);
   } else {
     // Serve file inline (display in browser)
-    addHeader(T_Content_Disposition, PSTR("inline"), false);
+    addHeader(T_Content_Disposition, T_inline, false);
   }
 
   _code = 200;
@@ -821,9 +823,9 @@ AsyncFileResponse::AsyncFileResponse(File content, const String &path, const cha
   char *filename = (char *)path.c_str() + filenameStart;
 
   if (download) {
-    snprintf_P(buf, sizeof(buf), PSTR("attachment; filename=\"%s\""), filename);
+    snprintf(buf, sizeof(buf), T_attachment, filename);
   } else {
-    snprintf_P(buf, sizeof(buf), PSTR("inline"));
+    snprintf(buf, sizeof(buf), T_inline);
   }
   addHeader(T_Content_Disposition, buf, false);
 }

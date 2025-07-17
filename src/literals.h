@@ -7,6 +7,9 @@ namespace asyncsrv {
 
 static constexpr const char *empty = "";
 
+static constexpr const char *T_inline = "inline";
+static constexpr const char *T_attachment = "attachment; filename=\"%s\"";
+
 static constexpr const char *T__opaque = "\", opaque=\"";
 static constexpr const char *T_100_CONTINUE = "100-continue";
 static constexpr const char *T_13 = "13";
@@ -106,6 +109,7 @@ static constexpr const char *T_ERROR = "ERROR";
 static constexpr const char *T__css = ".css";
 static constexpr const char *T__eot = ".eot";
 static constexpr const char *T__gif = ".gif";
+static constexpr const char *T__mp4 = ".mp4";
 static constexpr const char *T__gz = ".gz";
 static constexpr const char *T__htm = ".htm";
 static constexpr const char *T__html = ".html";
@@ -132,6 +136,7 @@ static constexpr const char *T_font_ttf = "font/ttf";
 static constexpr const char *T_font_woff = "font/woff";
 static constexpr const char *T_font_woff2 = "font/woff2";
 static constexpr const char *T_image_gif = "image/gif";
+static constexpr const char *T_video_mp4 = "video/mp4";
 static constexpr const char *T_image_jpeg = "image/jpeg";
 static constexpr const char *T_image_png = "image/png";
 static constexpr const char *T_image_svg_xml = "image/svg+xml";
