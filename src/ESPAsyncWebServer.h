@@ -51,7 +51,7 @@
 #endif
 
 #ifndef ASYNCWEBSERVER_RX_TIMEOUT
-#define ASYNCWEBSERVER_RX_TIMEOUT 2  // Seconds for timeout
+#define ASYNCWEBSERVER_RX_TIMEOUT 3  // Seconds for timeout
 #endif
 
 extern AsyncConsole AsyncWebServerConsole;
