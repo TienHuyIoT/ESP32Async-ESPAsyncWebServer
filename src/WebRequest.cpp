@@ -4,10 +4,13 @@
 #include "ESPAsyncWebServer.h"
 #include "WebAuthentication.h"
 #include "WebResponseImpl.h"
+#include "AsyncWebServerLogging.h"
 #include "literals.h"
 #include <cstring>
 
-#define __is_param_char(c) ((c) && ((c) != '{') && ((c) != '[') && ((c) != '&') && ((c) != '='))
+static inline bool isParamChar(char c) {
+  return ((c) && ((c) != '{') && ((c) != '[') && ((c) != '&') && ((c) != '='));
+}
 
 static void doNotDelete(AsyncWebServerRequest *) {}
 
@@ -29,7 +32,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   c->onError(
     [](void *r, AsyncClient *c, int8_t error) {
       (void)c;
-      // log_e("AsyncWebServerRequest::_onError");
+      // async_ws_log_e("AsyncWebServerRequest::_onError");
       AsyncWebServerRequest *req = (AsyncWebServerRequest *)r;
       req->_onError(error);
     },
@@ -38,7 +41,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   c->onAck(
     [](void *r, AsyncClient *c, size_t len, uint32_t time) {
       (void)c;
-      // log_e("AsyncWebServerRequest::_onAck");
+      // async_ws_log_e("AsyncWebServerRequest::_onAck");
       AsyncWebServerRequest *req = (AsyncWebServerRequest *)r;
       req->_onAck(len, time);
     },
@@ -46,7 +49,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   );
   c->onDisconnect(
     [](void *r, AsyncClient *c) {
-      // log_e("AsyncWebServerRequest::_onDisconnect");
+      // async_ws_log_e("AsyncWebServerRequest::_onDisconnect");
       AsyncWebServerRequest *req = (AsyncWebServerRequest *)r;
       req->_onDisconnect();
       if (c) {
@@ -58,7 +61,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   c->onTimeout(
     [](void *r, AsyncClient *c, uint32_t time) {
       (void)c;
-      // log_e("AsyncWebServerRequest::_onTimeout");
+      // async_ws_log_e("AsyncWebServerRequest::_onTimeout");
       AsyncWebServerRequest *req = (AsyncWebServerRequest *)r;
       req->_onTimeout(time);
     },
@@ -67,7 +70,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   c->onData(
     [](void *r, AsyncClient *c, void *buf, size_t len) {
       (void)c;
-      // log_e("AsyncWebServerRequest::_onData");
+      // async_ws_log_e("AsyncWebServerRequest::_onData");
       AsyncWebServerRequest *req = (AsyncWebServerRequest *)r;
       req->_onData(buf, len);
     },
@@ -76,7 +79,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   c->onPoll(
     [](void *r, AsyncClient *c) {
       (void)c;
-      // log_e("AsyncWebServerRequest::_onPoll");
+      // async_ws_log_e("AsyncWebServerRequest::_onPoll");
       AsyncWebServerRequest *req = (AsyncWebServerRequest *)r;
       req->_onPoll();
     },
@@ -86,13 +89,15 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
 }
 
 AsyncWebServerRequest::~AsyncWebServerRequest() {
-  // log_e("AsyncWebServerRequest::~AsyncWebServerRequest");
+  // AsyncWebServerResponse("AsyncWebServerRequest::~AsyncWebServerRequest");
   ASYNC_SERVER_CONSOLE_I("Del request = %u", this);
 
 #ifdef ESP32
     // std::lock_guard<std::recursive_mutex> lock1(_headerLock);
     // std::lock_guard<std::recursive_mutex> lock2(_paramsLock);
+#ifdef ASYNCWEBSERVER_REGEX
     // std::lock_guard<std::recursive_mutex> lock3(_pathParamsLock);
+#endif
 #endif
 
   _this.reset();
@@ -101,7 +106,9 @@ AsyncWebServerRequest::~AsyncWebServerRequest() {
 
   _params.clear();
 
+#ifdef ASYNCWEBSERVER_REGEX
   _pathParams.clear();
+#endif
 
   // Has to check the response pointer due to it can be nullpoint from _onPoll() or _onAck()
   if (_response) {
@@ -128,9 +135,7 @@ void AsyncWebServerRequest::_onData(void *buf, size_t len) {
   // SSL/TLS handshake detection
 #ifndef ASYNC_TCP_SSL_ENABLED
   if (_parseState == PARSE_REQ_START && len && ((uint8_t *)buf)[0] == 0x16) {  // 0x16 indicates a Handshake message (SSL/TLS).
-#ifdef ESP32
-    log_d("SSL/TLS handshake detected: resetting connection");
-#endif
+    async_ws_log_d("SSL/TLS handshake detected: resetting connection");
     _parseState = PARSE_REQ_FAIL;
     abort();
     return;
@@ -158,9 +163,7 @@ void AsyncWebServerRequest::_onData(void *buf, size_t len) {
         char ch = str[len - 1];
         str[len - 1] = 0;
         if (!_temp.reserve(_temp.length() + len)) {
-#ifdef ESP32
-          log_e("Failed to allocate");
-#endif
+          async_ws_log_e("Failed to allocate");
           _parseState = PARSE_REQ_FAIL;
           abort();
           return;
@@ -199,9 +202,12 @@ void AsyncWebServerRequest::_onData(void *buf, size_t len) {
         if (_parsedLength == 0) {
           if (_contentType.startsWith(T_app_xform_urlencoded)) {
             _isPlainPost = true;
-          } else if (_contentType == T_text_plain && __is_param_char(((char *)buf)[0])) {
+          } else if (_contentType == T_text_plain && isParamChar(((char *)buf)[0])) {
             size_t i = 0;
-            while (i < len && __is_param_char(((char *)buf)[i++]));
+            char ch;
+            do {
+              ch = ((char *)buf)[i];
+            } while (i++ < len && isParamChar(ch));
             if (i < len && ((char *)buf)[i - 1] == '=') {
               _isPlainPost = true;
             }
@@ -288,13 +294,6 @@ void AsyncWebServerRequest::_onDisconnect() {
   }
   _client = nullptr;
   _server->_handleDisconnect(this);
-}
-
-void AsyncWebServerRequest::_addPathParam(const char *p) {
-#ifdef ESP32
-  std::lock_guard<std::recursive_mutex> lock3(_pathParamsLock);
-#endif
-  _pathParams.emplace_back(p);
 }
 
 void AsyncWebServerRequest::_addGetParams(const String &params) {
@@ -573,9 +572,7 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last) {
           }
           _itemBuffer = (uint8_t *)malloc(RESPONSE_STREAM_BUFFER_SIZE);
           if (_itemBuffer == NULL) {
-#ifdef ESP32
-            log_e("Failed to allocate");
-#endif
+            async_ws_log_e("Failed to allocate");
             _multiParseState = PARSE_ERROR;
             abort();
             return;
@@ -632,13 +629,11 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last) {
       if (!_itemIsFile) {
         _params.emplace_back(_itemName, _itemValue, true);
       } else {
-        if (_itemSize) {
-          if (_handler) {
-            _handler->handleUpload(this, _itemFilename, _itemSize - _itemBufferIndex, _itemBuffer, _itemBufferIndex, true);
-          }
-          _itemBufferIndex = 0;
-          _params.emplace_back(_itemName, _itemFilename, true, true, _itemSize);
+        if (_handler) {
+          _handler->handleUpload(this, _itemFilename, _itemSize - _itemBufferIndex, _itemBuffer, _itemBufferIndex, true);
         }
+        _itemBufferIndex = 0;
+        _params.emplace_back(_itemName, _itemFilename, true, true, _itemSize);
         free(_itemBuffer);
         _itemBuffer = NULL;
       }
@@ -743,7 +738,7 @@ void AsyncWebServerRequest::_runMiddlewareChain() {
 
 void AsyncWebServerRequest::_send() {
   if (!_sent && !_paused) {
-    // log_d("AsyncWebServerRequest::_send()");
+    // async_ws_log_d("AsyncWebServerRequest::_send()");
 
     // user did not create a response ?
     if (!_response) {
@@ -1069,9 +1064,7 @@ void AsyncWebServerRequest::requestAuthentication(AsyncAuthType method, const ch
         header.concat('"');
         r->addHeader(T_WWW_AUTH, header.c_str());
       } else {
-#ifdef ESP32
-        log_e("Failed to allocate");
-#endif
+        async_ws_log_e("Failed to allocate");
         abort();
       }
 
@@ -1095,9 +1088,7 @@ void AsyncWebServerRequest::requestAuthentication(AsyncAuthType method, const ch
           header.concat((char)0x22);  // '"'
           r->addHeader(T_WWW_AUTH, header.c_str());
         } else {
-#ifdef ESP32
-          log_e("Failed to allocate");
-#endif
+          async_ws_log_e("Failed to allocate");
           abort();
         }
       }
@@ -1153,18 +1144,6 @@ const String &AsyncWebServerRequest::argName(size_t i) const {
   return getParam(i)->name();
 }
 
-const String &AsyncWebServerRequest::pathArg(size_t i) const {
-#ifdef ESP32
-  std::lock_guard<std::recursive_mutex> lock3(_pathParamsLock);
-#endif
-  if (i >= _pathParams.size()) {
-    return emptyString;
-  }
-  auto it = _pathParams.begin();
-  std::advance(it, i);
-  return *it;
-}
-
 const String &AsyncWebServerRequest::header(const char *name) const {
   const AsyncWebHeader *h = getHeader(name);
   return h ? h->value() : emptyString;
@@ -1193,9 +1172,7 @@ String AsyncWebServerRequest::urlDecode(const String &text) const {
   String decoded;
   // Allocate the string internal buffer - never longer from source text
   if (!decoded.reserve(len)) {
-#ifdef ESP32
-    log_e("Failed to allocate");
-#endif
+    async_ws_log_e("Failed to allocate");
     return emptyString;
   }
   while (i < len) {

@@ -17,6 +17,23 @@
 #include <unordered_map>
 #include <vector>
 
+#if __has_include("ArduinoJson.h")
+#include <ArduinoJson.h>
+
+#if ARDUINOJSON_VERSION_MAJOR >= 5
+#define ASYNC_JSON_SUPPORT 1
+#else
+#define ASYNC_JSON_SUPPORT 0
+#endif  // ARDUINOJSON_VERSION_MAJOR >= 5
+
+#if ARDUINOJSON_VERSION_MAJOR >= 6
+#define ASYNC_MSG_PACK_SUPPORT 1
+#else
+#define ASYNC_MSG_PACK_SUPPORT 0
+#endif  // ARDUINOJSON_VERSION_MAJOR >= 6
+
+#endif  // __has_include("ArduinoJson.h")
+
 #if defined(ESP32) || defined(LIBRETINY)
 #ifdef ESP32
 #include "sdkconfig.h"
@@ -39,9 +56,7 @@
 #define ASYNCWEBSERVER_FORK_ESP32Async
 
 #ifdef ASYNCWEBSERVER_REGEX
-#define ASYNCWEBSERVER_REGEX_ATTRIBUTE
-#else
-#define ASYNCWEBSERVER_REGEX_ATTRIBUTE __attribute__((warning("ASYNCWEBSERVER_REGEX not defined")))
+#include <regex>
 #endif
 
 // See https://github.com/ESP32Async/ESPAsyncWebServer/commit/3d3456e9e81502a477f6498c44d0691499dda8f9#diff-646b25b11691c11dce25529e3abce843f0ba4bd07ab75ec9eee7e72b06dbf13fR388-R392
@@ -223,6 +238,7 @@ class AsyncWebServerRequest {
   friend class AsyncWebServer;
   friend class AsyncCallbackWebHandler;
   friend class AsyncFileResponse;
+  friend class AsyncStaticWebHandler;
 
 private:
   AsyncClient *_client;
@@ -256,11 +272,13 @@ private:
 #ifdef ESP32
   mutable std::recursive_mutex _headerLock;
   mutable std::recursive_mutex _paramsLock;
-  mutable std::recursive_mutex _pathParamsLock;
-#endif
+  #endif
   std::list<AsyncWebHeader> _headers;
   std::list<AsyncWebParameter> _params;
+  #ifdef ASYNCWEBSERVER_REGEX
+  mutable std::recursive_mutex _pathParamsLock;
   std::list<String> _pathParams;
+#endif
 
   std::unordered_map<const char *, String, std::hash<const char *>, std::equal_to<const char *>> _attributes;
 
@@ -284,8 +302,6 @@ private:
   void _onDisconnect();
   void _onData(void *buf, size_t len);
 
-  void _addPathParam(const char *param);
-
   bool _parseReqHead();
   bool _parseReqHeader();
   void _parseLine();
@@ -300,7 +316,7 @@ private:
   void _send();
   void _runMiddlewareChain();
 
-  static void _getEtag(uint8_t trailer[4], char *serverETag);
+  static bool _getEtag(File gzFile, char *eTag);
 
 public:
   File _tempFile;
@@ -362,6 +378,17 @@ public:
     requestAuthentication(isDigest ? AsyncAuthType::AUTH_DIGEST : AsyncAuthType::AUTH_BASIC, realm);
   }
   void requestAuthentication(AsyncAuthType method, const char *realm = nullptr, const char *_authFailMsg = nullptr);
+
+  // detected Authentication type from "Authorization" request header during request parsing
+  AsyncAuthType authType() const {
+    return _authMethod;
+  }
+
+  // raw value of "Authorization" request header after the auth type
+  // For example, for header "Authorization: Bearer <token>", <token> is the value returned
+  const String &authChallenge() const {
+    return _authorization;
+  }
 
   // IMPORTANT: this method is for internal use ONLY
   // Please do not use it!
@@ -611,10 +638,22 @@ public:
   bool hasArg(const __FlashStringHelper *data) const;  // check if F(argument) exists
 #endif
 
-  const String &ASYNCWEBSERVER_REGEX_ATTRIBUTE pathArg(size_t i) const;
-  const String &ASYNCWEBSERVER_REGEX_ATTRIBUTE pathArg(int i) const {
+#ifdef ASYNCWEBSERVER_REGEX
+  const String &pathArg(size_t i) const {
+    if (i >= _pathParams.size()) {
+      return emptyString;
+    }
+    auto it = _pathParams.begin();
+    std::advance(it, i);
+    return *it;
+  }
+  const String &pathArg(int i) const {
     return i < 0 ? emptyString : pathArg((size_t)i);
   }
+#else
+  const String &pathArg(size_t i) const __attribute__((error("ERR: pathArg() requires -D ASYNCWEBSERVER_REGEX and only works on regex handlers")));
+  const String &pathArg(int i) const __attribute__((error("ERR: pathArg() requires -D ASYNCWEBSERVER_REGEX and only works on regex handlers")));
+#endif
 
   // get request header value by name
   const String &header(const char *name) const;
@@ -781,9 +820,34 @@ protected:
 // AsyncAuthenticationMiddleware is a middleware that checks if the request is authenticated
 class AsyncAuthenticationMiddleware : public AsyncMiddleware {
 public:
+  const String &username() const {
+    return _username;
+  }
+  const String &credentials() const {
+    return _credentials;
+  }
+  const String &realm() const {
+    return _realm;
+  }
+  const String &authFailureMessage() const {
+    return _authFailMsg;
+  }
+  bool isHash() const {
+    return _hash;
+  }
+  AsyncAuthType authType() const {
+    return _authMethod;
+  }
+
   void setUsername(const char *username);
   void setPassword(const char *password);
   void setPasswordHash(const char *hash);
+
+  // can be used for Bearer token authentication with a static shared secret
+  void setToken(const char *token);
+  void setAuthentificationFunction(std::function<bool(AsyncWebServerRequest *request)> func) {
+    _authcFunc = func;
+  }
 
   void setRealm(const char *realm) {
     _realm = realm;
@@ -827,6 +891,9 @@ private:
   AsyncAuthType _authMethod = AsyncAuthType::AUTH_NONE;
   String _authFailMsg;
   bool _hasCreds = false;
+  std::function<bool(AsyncWebServerRequest *request)> _authcFunc = [this](AsyncWebServerRequest *request) {
+    return request->authenticate(_username.c_str(), _credentials.c_str(), _realm.c_str(), _hash);
+  };
 };
 
 using ArAuthorizeFunction = std::function<bool(AsyncWebServerRequest *request)>;
@@ -916,7 +983,13 @@ public:
     _maxAge = seconds;
   }
 
-  void addCORSHeaders(AsyncWebServerResponse *response);
+#ifndef ESP8266
+  [[deprecated("Use instead: addCORSHeaders(AsyncWebServerRequest *request, AsyncWebServerResponse *response)")]]
+#endif
+  void addCORSHeaders(AsyncWebServerResponse *response) {
+    addCORSHeaders(nullptr, response);
+  }
+  void addCORSHeaders(AsyncWebServerRequest *request, AsyncWebServerResponse *response);
 
   void run(AsyncWebServerRequest *request, ArMiddlewareNext next);
 
@@ -1130,6 +1203,20 @@ typedef std::function<void(AsyncWebServerRequest *request, const String &filenam
   ArUploadHandlerFunction;
 typedef std::function<void(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)> ArBodyHandlerFunction;
 
+#if ASYNC_JSON_SUPPORT == 1
+
+class AsyncCallbackJsonWebHandler;
+typedef std::function<void(AsyncWebServerRequest *request, JsonVariant &json)> ArJsonRequestHandlerFunction;
+
+#if ASYNC_MSG_PACK_SUPPORT == 1
+#ifndef ESP8266
+[[deprecated("Replaced by AsyncCallbackJsonWebHandler")]]
+#endif
+typedef AsyncCallbackJsonWebHandler AsyncCallbackMessagePackWebHandler;
+#endif  // ASYNC_MSG_PACK_SUPPORT
+
+#endif
+
 class AsyncWebServer : public AsyncMiddlewareChain {
 protected:
   AsyncServer _server;
@@ -1220,6 +1307,10 @@ public:
     ArBodyHandlerFunction onBody = nullptr
   );
 
+#if ASYNC_JSON_SUPPORT == 1
+  AsyncCallbackJsonWebHandler &on(const char *uri, WebRequestMethodComposite method, ArJsonRequestHandlerFunction onBody);
+#endif
+
   AsyncStaticWebHandler &serveStatic(const char *uri, fs::FS &fs, const char *path, const char *cache_control = NULL);
 
   void onNotFound(ArRequestHandlerFunction fn);   // called when handler is not assigned
@@ -1268,5 +1359,9 @@ public:
 #include "AsyncWebSocket.h"
 #include "WebHandlerImpl.h"
 #include "WebResponseImpl.h"
+
+#if ASYNC_JSON_SUPPORT == 1
+#include <AsyncJson.h>
+#endif
 
 #endif /* _AsyncWebServer_H_ */

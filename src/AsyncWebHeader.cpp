@@ -15,14 +15,14 @@ const AsyncWebHeader AsyncWebHeader::parse(const char *data) {
   if (strchr(data, '\n') || strchr(data, '\r')) {
     return AsyncWebHeader();  // Invalid header format
   }
-  char *colon = strchr(data, ':');
+  const char *colon = strchr(data, ':');
   if (!colon) {
     return AsyncWebHeader();  // separator not found
   }
   if (colon == data) {
     return AsyncWebHeader();  // Header name cannot be empty
   }
-  char *startOfValue = colon + 1;  // Skip the colon
+  const char *startOfValue = colon + 1;  // Skip the colon
   // skip one optional whitespace after the colon
   if (*startOfValue == ' ') {
     startOfValue++;
@@ -31,20 +31,4 @@ const AsyncWebHeader AsyncWebHeader::parse(const char *data) {
   name.reserve(colon - data);
   name.concat(data, colon - data);
   return AsyncWebHeader(name, String(startOfValue));
-}
-
-String AsyncWebHeader::toString() const {
-  String str;
-  if (str.reserve(_name.length() + _value.length() + 2)) {
-    str.concat(_name);
-    str.concat((char)0x3a);
-    str.concat((char)0x20);
-    str.concat(_value);
-    str.concat(asyncsrv::T_rn);
-  } else {
-#ifdef ESP32
-    log_e("Failed to allocate");
-#endif
-  }
-  return str;
 }

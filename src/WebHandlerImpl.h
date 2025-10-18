@@ -5,10 +5,6 @@
 #define ASYNCWEBSERVERHANDLERIMPL_H_
 
 #include <string>
-#ifdef ASYNCWEBSERVER_REGEX
-#include <regex>
-#endif
-
 #include "stddef.h"
 #include <time.h>
 
